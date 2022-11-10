@@ -10,6 +10,14 @@ class testFunctionsSuite
     val df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load("src/test/resources/test.json")
     df.writeStream.format("console").start()
     assert(df.isStreaming, true)
-  }
+ }
+
+ test("test streaming on gz file..."){
+    val df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load("src/test/resources/test.json.gz")
+    df.writeStream.format("console").start()
+    assert(df.isStreaming, true)
+ }
+
+
 }
  */
