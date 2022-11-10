@@ -1,6 +1,8 @@
 package com.databricks.labs.sparkstreaming.jsonmrf
 
-import java.io.BufferedInputStream
+//import org.apache.hadoop.io.compress.CompressionInputStream
+import java.util.zip.GZIPInputStream
+import java.io.{InputStreamReader, BufferedInputStream}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
@@ -16,8 +18,13 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   private var batches = collection.mutable.ListBuffer.empty[(UTF8String, Long)]
   private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
   private val fs = FileSystem.get(hadoopConf)
-  private val inStream = new BufferedInputStream(fs.open(new Path(options.get("path").get)))
-
+  private val fileStream = fs.open(new Path(options.get("path").get))
+  //  private val inStream = new BufferedInputStream(fs.open(new Path(options.get("path").get)))
+  private val inStream = options.get("path").get match {
+    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream))
+    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream)
+    case _ => throw new Exception("codec for file extension not implemented yet")
+  }
   override def schema: StructType = JsonMRFSource.schema
   override def getOffset: Option[Offset] = this.synchronized {
     if (offset == -1) None else Some(offset)
