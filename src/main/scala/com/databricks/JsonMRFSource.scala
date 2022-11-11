@@ -42,7 +42,12 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
           batches.append((UTF8String.fromString("{" + JsonParser.batch.mkString),offset.offset))
         }
       }
+      //close resources
       inStream.close
+      fileStream.close
+      fs.close
+
+      //stop the streaming context here
     }
   }
 
@@ -59,7 +64,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
  
     var isKey = true //if we are currently reading in a key value, starts out as true
     var headerKey = ListBuffer.empty[Char] //the last key we have read in the header
-
 
     //stack size is <= 1
     def parseHeader(i: Int): Unit = {
@@ -205,12 +209,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     new Dataset(sqlContext.sparkSession, plan, RowEncoder(qe.analyzed.schema)).toDF
   }
 
-  override def stop(): Unit = ???
-  /*{
-    reader.stop
-    fs.close
-  }*/
-
+  override def stop(): Unit = reader.stop
 
   override def commit(end: Offset): Unit = this.synchronized {
     val committed = (end match {
@@ -218,10 +217,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       case _ => LongOffset(-1)
     }).offset
     val toKeep = batches.filter { case (_, idx) => idx > committed }
-
-    println(s"after clean size ${toKeep.length}")
-    println(s"deleted: ${batches.size - toKeep.size}")
-
     batches = toKeep
   }
 }
