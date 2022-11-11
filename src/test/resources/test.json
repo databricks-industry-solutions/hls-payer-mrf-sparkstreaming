@@ -19,7 +19,7 @@
 	}
     ],
     "exp_date": "11-10-2022",
-    "provdier_references": [
+    "provider_references": [
         { "billing_code": "J1234",
           "negotiated_rates": [{
               "negotiated_prices": [{
@@ -28,4 +28,5 @@
               }]
           }]
         }]
+    "recreating_company": "centenes"
 }

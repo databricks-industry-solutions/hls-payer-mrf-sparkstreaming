@@ -87,7 +87,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
           if (headerKey.mkString.toLowerCase == "provider_references" || headerKey.mkString.toLowerCase == "in_network"){
             if (headerKey.mkString.toLowerCase == "provider_references") batch = batch.dropRight(22) //remove this key and write out our batch
             if (headerKey.mkString.toLowerCase == "in_network") batch = batch.dropRight(13) //remove this key and write out our batch
-                                                                                            //            if (batch(0) != OpenB.toChar) batch.prepend(OpenB.toChar)
+            if (batch(0) == Comma.toChar) batch(0) = OpenB.toChar
             this.synchronized{
               offset = offset + 1
               batches.append((UTF8String.fromString(batch.mkString + "}"), offset.offset))
