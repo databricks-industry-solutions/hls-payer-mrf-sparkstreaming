@@ -64,10 +64,16 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     //stack size is <= 1
     def parseHeader(i: Int): Unit = {
       i match {
+        case Comma =>
+          if ( !isQuoted ) {
+            isKey = true
+            headerKey = ListBuffer.empty[Char]
+          }
+          batch.append(i.toChar)
         case CloseL =>
           this.synchronized{
             offset = offset + 1
-            batches.append((UTF8String.fromString("{" + headerKey.mkString + ":" + batch.mkString),offset.offset))
+            batches.append((UTF8String.fromString("{\"" + headerKey.mkString + "\":" + batch.mkString + "}"),offset.offset))
           }
           batch = ListBuffer.empty[Char]
           headerKey = ListBuffer.empty[Char]
@@ -81,11 +87,12 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
           if (headerKey.mkString.toLowerCase == "provider_references" || headerKey.mkString.toLowerCase == "in_network"){
             if (headerKey.mkString.toLowerCase == "provider_references") batch = batch.dropRight(22) //remove this key and write out our batch
             if (headerKey.mkString.toLowerCase == "in_network") batch = batch.dropRight(13) //remove this key and write out our batch
-            if (batch(0) != OpenB.toChar) batch.prepend(OpenB.toChar)
+                                                                                            //            if (batch(0) != OpenB.toChar) batch.prepend(OpenB.toChar)
             this.synchronized{
               offset = offset + 1
               batches.append((UTF8String.fromString(batch.mkString + "}"), offset.offset))
             }
+            batch = ListBuffer.empty[Char]
           }
           else{
             batch.append(i.toChar)
@@ -93,27 +100,34 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
         }
       }
     }
+    def debugState(i: Int): Unit = {
+      println("Debug Stack Size: " + stack.length)
+      println("Debug batch: " + batch.mkString)
+      println("Debug isKey: " + isKey)
+      println("Debug headerKey: " + headerKey.mkString)
+      println("Debug isHeaderJson: " + isHeaderJson)
+      println()
+      println("Debug Upcoming Value: " + i.toChar.toString)
+    }
 
     def parse(i: Int): Unit = {
-//      println("Debug Stack Size: " + stack.length)
-//      println("Debug batch: " + batch.mkString)
       i match {
         case x if Whitespace.contains(x) =>  if ( isQuoted ) batch.append(i.toChar)
         case Quote => if ( prev != Escape ) isQuoted = !isQuoted
-          batch.append(i) //TODO 
+          batch.append(i.toChar)
         case Colon => if (isHeaderJson) parseHeader(i) else batch.append(i.toChar)
         case OpenB => if ( !isQuoted && prev != Escape ) stack.push(i.toChar)
+          batch.append(i.toChar)
         case OpenL =>
-          if ( !isQuoted && prev != Escape ){ stack.push(i.toChar)
-            if ( !isHeaderJson ) batch.append(i.toChar) //if this is a header value we won't write it out (e.g. break apart a list as a seperate json object). The parseHeader()->Colon writes out batch prior to OpenL being seen
-          }
+          if ( !isHeaderJson ) batch.append(i.toChar) //if this is a header value we won't write it out (e.g. break apart a list as a seperate json object). The parseHeader()->Colon writes out batch prior to OpenL being seen
+          if ( !isQuoted && prev != Escape )  stack.push(i.toChar)
         case CloseL =>
           if ( !isQuoted && prev != Escape ){
             if ( stack.top == OpenL ) stack.pop
             else throw new Exception("Sequence mismatch -> Found: " + CloseL.toChar.toString + " Expected Matching: " + stack.top.toChar.toString )
-            if ( isHeaderJson ) parseHeader(i)
           }
-          batch.append(i.toChar)
+          if ( isHeaderJson ) parseHeader(i)
+          else batch.append(i.toChar)
 
         case CloseB =>
           if ( !isQuoted && prev != Escape ) {
@@ -122,85 +136,21 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
           }
           batch.append(i.toChar)
         case Comma =>
-          if(stack.length != 2) batch.append(i.toChar) //header or deeply nested
+          if(isHeaderJson) parseHeader(i)
+          else if(stack.length > 2) batch.append(i.toChar)
           else { //a place where we want to create a split 
             this.synchronized{
               offset = offset + 1
-              batches.append((UTF8String.fromString("{" + headerKey.mkString + ":" + batch.mkString), offset.offset))
+              batches.append((UTF8String.fromString("{\"" + headerKey.mkString + "\":" + batch.mkString + "}"), offset.offset))
             }
             batch = ListBuffer.empty[Char]
           }
-        case _ => if(isHeader && isQuoted && isKey)
+        case _ => if(isHeaderJson && isKey) headerKey.append(i.toChar)
           batch.append(i.toChar)
       }
       prev = i
     }
-
     def isHeaderJson(): Boolean = (stack.length <= 1)
-
-    /*
-     * Defining rules for parsing header only information
-
-    def parseHeader(i: Int): Unit = {
-      i match {
-        case Quote =>
-          if ( prev != Escape ) isQuoted = !isQuoted
-          if ( isKey ) headerKey.append(i.toChar)
-          batch.append(i.toChar)
-        case Colon =>
-          if ( !isQuoted ) isKey = !isKey
-          batch.append(i.toChar)
-        case CloseL =>
-          if ( !isQuoted && prev != Escape ) {
-            if ( stack.top == OpenL ) stack.pop
-            else throw new Exception("Sequence mismatch -> Found: " + CloseL.toChar.toString + " Expected Matching: " + stack.top.toChar.toString )
-          }
-          batch.append(i.toChar)
-      }
-    }
-
-     def p(i: Int): Unit = {
-      //Deeply Nested List
-      else { 
-        i match {
-          case x if Whitespace.contains(x) =>  if ( isQuoted ) batch.append(i.toChar)
-          case Quote =>
-            if ( prev != Escape ) isQuoted = !isQuoted
-            batch.append(i.toChar)
-          case Comma =>
-            if ( isQuoted ) batch.append(i.toChar)
-            else {
-              //Breakup based upon list structure. Assuming schema adherence stack size tells us how deep we are in this structure
-              if (stack.length == 2 && stack.top == CloseL){
-                this.synchronized{
-                  offset = offset + 1
-                  batches.append((UTF8String.fromString("{" + batch.mkString + "}"),offset.offset))
-                }
-                batch = ListBuffer.empty[Char]
-              }
-            }
-          case Colon => batch.append(i.toChar)
-          case OpenL => if ( !isQuoted && prev != Escape ) stack.push(OpenL)
-            batch.append(i.toChar)
-          case OpenB => if ( !isQuoted && prev != Escape ) stack.push(OpenB)
-            batch.append(i.toChar)
-          case CloseL =>
-            if ( !isQuoted && prev != Escape ){
-              if ( stack.top == OpenL ) stack.pop
-              else throw new Exception("Sequence mismatch -> Found: " + CloseL.toChar.toString + " Expected Matching: " + stack.top.toChar.toString )
-            }
-            batch.append(i.toChar)
-          case CloseB =>
-            if ( !isQuoted && prev != Escape ) {
-              if ( stack.top == OpenB ) stack.pop
-              else throw new Exception("Sequence mismatch -> Found: " + CloseB.toChar.toString + " Expected Matching: " + stack.top.toChar.toString )
-            }
-            batch.append(i.toChar)
-        }
-      }
-      prev = i
-     }
-          */
 
     //Constants
     val Whitespace = Seq(32, 9, 13, 10) //space, tab, CR, LF
