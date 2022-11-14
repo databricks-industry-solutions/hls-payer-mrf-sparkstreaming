@@ -15,47 +15,93 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 
 class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) extends Source {
   private var offset: LongOffset = LongOffset(-1)
-  private var batches = ListBuffer.empty[(UTF8String, Long)]
+  private var batches = ListBuffer.empty[(SparkChunk, Long)]
+  private val BufferSize =  //256MB
+
   private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
   private val fs = FileSystem.get(hadoopConf)
   private val fileStream = fs.open(new Path(options.get("path").get))
   private val inStream = options.get("path").get match {
-    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), 134217728) //128MB buffer
-    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, 134217728) //128MB buffer
+    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), BufferSize) //128MB buffer
+    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, BufferSize) //128MB buffer
     case _ => throw new Exception("codec for file extension not implemented yet")
   }
   override def schema: StructType = JsonMRFSource.schema
   override def getOffset: Option[Offset] = this.synchronized {
     if (offset == -1) None else Some(offset)
   }
-  
+
+
+  object JsonParser{
+
+    /*
+     *  @param arr: array to parse assuming schema compliance
+     *  @param: arrLength the length of the array populated
+     *  Return: Key name found (expecting in_network or provider_references) and Offset in array
+     */
+    def parseUntilArray(arr: Array[Byte], arrLength: Int): (String, Int) = {
+      ???
+    }
+
+    /*
+     *  @param arr: array to parse assuming schema compliance
+     *  @param arrLength: the length of the array populated       
+     *  @param keySearch: key must be seen, at the level of the split, in order to determine where to split
+     * 
+     *  @Return: return the index into the array 
+     */
+    def rightMostArraySplit(arr: Array[Byte], arrLength: Int, keySearch: String): Int = {
+      ???
+    }
+  }
+
   val reader = new Thread(){
+    var bytesRead = 0
+    var fileOffset = 0L
+    var buffer = new Array[Byte](BufferSize)
+
     override def run(){
-      Stream.continually(inStream.read)
-        .takeWhile(_ != -1)
-        .foreach(JsonParser.parse)
+      /* Read header until provider_references or in_network
+
+      while ((bytesRead = inStream.read(buffer,fileOffset, BufferSize)) >= 0){
+        fileOffset += bytesRead
+        /*
+         *  Cheat and find rightmost offset...  
+         */
+      }
+
+      //Read Trailer until provider_references or in_network
+
+      //Stream.continually(inStream.read)
+      //.takeWhile(_ != -1)
+      //.foreach(println)
+      //Batch read until end of array...
+
+      //Read header until in_network or provider_references or end
+
       if (JsonParser.stack.length != 0) throw new Exception("Unexpected end of file")
       if (JsonParser.batch.length > 1) { //header info at the end of the file
         this.synchronized{
           offset = offset + 1
           batches.append((UTF8String.fromString("{" + JsonParser.batch.mkString),offset.offset))
         }
-      }
+       }
+       
       //close resources
       inStream.close
       fileStream.close
       fs.close
 
-      //stop the streaming context here
+       //stop the streaming context here
+       */
     }
   }
 
   /*
    * For now, assume valid in-network schema
    *  https://github.com/CMSgov/price-transparency-guide/tree/master/schemas/in-network-rates
-   */
+   *
   object JsonParser {
-
     var prev = -1 //previouisly seen byte
     var isQuoted = false  //are we inbetween quotes? 
     var batch = ListBuffer.empty[Char] //the current batch we are building to write out   
@@ -102,15 +148,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
           }
         }
       }
-    }
-    def debugState(i: Int): Unit = {
-      println("Debug Stack Size: " + stack.length)
-      println("Debug batch: " + batch.mkString)
-      println("Debug isKey: " + isKey)
-      println("Debug headerKey: " + headerKey.mkString)
-      println("Debug isHeaderJson: " + isHeaderJson)
-      println()
-      println("Debug Upcoming Value: " + i.toChar.toString)
     }
 
     def parse(i: Int): Unit = {
@@ -166,16 +203,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     val Comma = 44 // ','
     val Quote = 34 // '"'
   }
-
-  def doSomething(i: Int): Unit = {
-    //e.g. below just creates each byte as a seperate value in the stream reader
-    val c = i.toChar.toString
-    this.synchronized{
-      offset = offset + 1
-      batches.append((UTF8String.fromString(c), offset.offset))
-    }
-  }
-  
+   */
   reader.start()
 
   //Not sure why convert method was removed from LongOffset
@@ -198,7 +226,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     val data = batches
       .par
       .filter { case (_, idx) => idx >= s && idx <= e}
-      .map{  case(v, _) => InternalRow(v) }
+      .map{  case(v, _) => InternalRow(v.toSeq) }
       .seq
 
     val plan = new LocalRelation(Seq(AttributeReference("data", StringType)()), data, isStreaming=true)
