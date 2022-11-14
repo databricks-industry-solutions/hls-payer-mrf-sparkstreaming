@@ -20,8 +20,8 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   private val fs = FileSystem.get(hadoopConf)
   private val fileStream = fs.open(new Path(options.get("path").get))
   private val inStream = options.get("path").get match {
-    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream))
-    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream)
+    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), 134217728) //128MB buffer
+    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, 134217728) //128MB buffer
     case _ => throw new Exception("codec for file extension not implemented yet")
   }
   override def schema: StructType = JsonMRFSource.schema
@@ -34,7 +34,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       Stream.continually(inStream.read)
         .takeWhile(_ != -1)
         .foreach(JsonParser.parse)
-
       if (JsonParser.stack.length != 0) throw new Exception("Unexpected end of file")
       if (JsonParser.batch.length > 1) { //header info at the end of the file
         this.synchronized{
@@ -91,7 +90,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
           if (headerKey.mkString.toLowerCase == "provider_references" || headerKey.mkString.toLowerCase == "in_network"){
             if (headerKey.mkString.toLowerCase == "provider_references") batch = batch.dropRight(22) //remove this key and write out our batch
             if (headerKey.mkString.toLowerCase == "in_network") batch = batch.dropRight(13) //remove this key and write out our batch
-            if (batch(0) == Comma.toChar) batch(0) = OpenB.toChar
+            //causes indexoutofbounds error if (batch(0) == Comma.toChar) batch(0) = OpenB.toChar
             this.synchronized{
               offset = offset + 1
               batches.append((UTF8String.fromString(batch.mkString + "}"), offset.offset))
