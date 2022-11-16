@@ -16,7 +16,8 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) extends Source {
   private var offset: LongOffset = LongOffset(-1)
   private var batches = ListBuffer.empty[(SparkChunk, Long)]
-  private val BufferSize =  //256MB
+  private val BufferSize = 268435456 //256MB
+//  private val BufferSize = 536870912 //512MB
 
   private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
   private val fs = FileSystem.get(hadoopConf)
@@ -29,30 +30,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   override def schema: StructType = JsonMRFSource.schema
   override def getOffset: Option[Offset] = this.synchronized {
     if (offset == -1) None else Some(offset)
-  }
-
-
-  object JsonParser{
-
-    /*
-     *  @param arr: array to parse assuming schema compliance
-     *  @param: arrLength the length of the array populated
-     *  Return: Key name found (expecting in_network or provider_references) and Offset in array
-     */
-    def parseUntilArray(arr: Array[Byte], arrLength: Int): (String, Int) = {
-      ???
-    }
-
-    /*
-     *  @param arr: array to parse assuming schema compliance
-     *  @param arrLength: the length of the array populated       
-     *  @param keySearch: key must be seen, at the level of the split, in order to determine where to split
-     * 
-     *  @Return: return the index into the array 
-     */
-    def rightMostArraySplit(arr: Array[Byte], arrLength: Int, keySearch: String): Int = {
-      ???
-    }
   }
 
   val reader = new Thread(){
@@ -192,16 +169,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     }
     def isHeaderJson(): Boolean = (stack.length <= 1)
 
-    //Constants
-    val Whitespace = Seq(32, 9, 13, 10) //space, tab, CR, LF
-    val Escape = 92 // '\'
-    val OpenB = 123 // '{'
-    val CloseB = 125 // '}'
-    val OpenL =  91 // '['
-    val CloseL = 93 // ']'
-    val Colon = 58 // ':'
-    val Comma = 44 // ','
-    val Quote = 34 // '"'
+
   }
    */
   reader.start()

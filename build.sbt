@@ -7,7 +7,6 @@ lazy val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "3.2.1")
 ThisBuild / organization := "com.databricks.labs"
 ThisBuild / organizationName := "Databricks, Inc."
 
-
 lazy val sparkDependencies = Seq(
   "org.apache.spark" %% "spark-catalyst" % sparkVersion,
   "org.apache.spark" %% "spark-core" % sparkVersion,

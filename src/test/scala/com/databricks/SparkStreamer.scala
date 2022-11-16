@@ -38,8 +38,16 @@ spark.sparkContext.setLogLevel("ERROR")
 val hadoopConf = spark.sqlContext.sparkSession.sessionState.newHadoopConf()
 val fs = FileSystem.get(hadoopConf) 
  val fileStream = fs.open(new Path("/Users/aaron.zavora/python/payer-pricing/data/2022-10-05-aetna-life-insurance.json"))
- val BufferSize = 2147483647
-val inStream = new BufferedInputStream(fileStream, BufferSize) //256MB buffer 
+ val BufferSize = 268435456 //256MB
+// val BufferSize = 536870912 //512MB
+ 
+val inStream = new BufferedInputStream(fileStream, BufferSize) 
+ //inStream.available == 2GB == 2147483647
+
+val buffer = new Array[Byte](BufferSize)
+val bytesRead = inStream.read(buffer,0, BufferSize)
 
 
+JsonParser.parseUntilArrayLeft(buffer, bytesRead)
+JsonParser.searchKeyRight(buffer, bytesRead, JsonParser.parseUntilArrayLeft(buffer, bytesRead))
  */
