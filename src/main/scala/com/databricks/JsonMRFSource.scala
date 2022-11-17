@@ -31,6 +31,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     if (offset == -1) None else Some(offset)
   }
 
+ 
   val reader = new Thread(){
     /*
      * Recursive attempt at parsing. Return value is umatched array Bytes that need to be merged with next buffer read
@@ -42,8 +43,13 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       headerKey match {
         case Some("provider_references") | Some("in_network") =>
           ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)  match {
-            case (_, ByteParser.EOB) => ??? //array cut in half
-            case (x,y) => //full record found within a byteArray
+            case (x, ByteParser.EOB) => //array has been cut between bytes
+              this.synchronized {
+                offset = offset + 1
+                batches.append( (new SparkChunk(Seq(Array('['.toByte), buffer.slice(startIndex, x+1), Array(']'.toByte))), offset.offset ) )
+              }
+              return Some(buffer.slice(x+1, bytesRead)) //return leftovers
+            case (x,y) => //full record found within a byteArray. Y = outer array end, x = last element inside array end
               this.synchronized {
                 offset = offset + 1
                 batches.append( (new SparkChunk(Seq(Array('['.toByte), buffer.slice(startIndex, x+1), Array(']'.toByte))), offset.offset ) )
@@ -69,7 +75,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
                 case (None, _) => ??? //this is where we cannot find the key in our buffer... edge case will not do this for now
                 case (Some(x), _) =>
                   val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
-                  if (headerEnding != -1) { //header before array 
+                  if (headerEnding != -1) { //header before array
                     var header = buffer.slice(startIndex, headerEnding + 1)
                     //this header object is not at the beginning of the file
                     if ( header(0).toInt == ByteParser.Comma ) header(0) = ByteParser.OpenB.toByte
@@ -86,12 +92,15 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
           }
       }
     }
-
+    /*
+     *
+     */
     override def run(){
       val buffer = new Array[Byte](BufferSize)
       val internalBufSize = inStream.available
       val bytesRead = inStream.read(buffer,0, BufferSize)
       val rv = parse(bytesRead, buffer, 0, None)
+      
 
     }
     def runs(){
