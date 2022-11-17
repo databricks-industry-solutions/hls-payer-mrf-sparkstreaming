@@ -35,28 +35,34 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     /*
      * Recursive attempt at parsing. Return value is umatched array Bytes that need to be merged with next buffer read
      */
-    def parse(bytesRead: Int, buffer: Array[Byte], startIndex: Int, headerKey: Option[String]): Array[Byte] = {
+    def parse(bytesRead: Int, buffer: Array[Byte], startIndex: Int, headerKey: Option[String]): Option[Array[Byte]] = {
       println("DEBUG START: startIndex:" + startIndex + " - headerKey:" + headerKey)
       println("DEBUG END: ")
 
       headerKey match {
-        case Some("provider_references") =>
+        case Some("provider_references") | Some("in_network") =>
           ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)  match {
             case (_, ByteParser.EOB) => ??? //array cut in half
             case (x,y) => //full record found within a byteArray
-              //println("Correctly have gotten to this point, ending array value is " + y+1)
               this.synchronized {
                 offset = offset + 1
-                batches.append( (new SparkChunk(Seq(buffer.slice(startIndex, x+1))), offset.offset ) )
+                batches.append( (new SparkChunk(Seq(Array('['.toByte), buffer.slice(startIndex, x+1), Array(']'.toByte))), offset.offset ) )
               }
-              return parse(bytesRead - y+1, buffer.slice(y+1, bytesRead), 0, None)
+              return parse(bytesRead - (y+1), buffer.slice(y+1, bytesRead), 0, None)
           }
-        case Some("in_network") => ???
-
         case _ => //indicates we are at a header level
           val arrayStartIndex = ByteParser.parseUntilArrayLeft(buffer, bytesRead) //the outermost [ wrapping a header array
           arrayStartIndex match {
-            case ByteParser.EOB => return buffer //TODO must have one pass outside of recursion to process remaining bytes in Array
+            case ByteParser.EOB => //no more arrays, is any more header items remaining?
+              if ( ByteParser.findByteRight(buffer, ByteParser.Colon, bytesRead-1, bytesRead) > 0  ){
+                var header = buffer.slice(startIndex, bytesRead-1)
+                if ( header(0).toInt == ByteParser.Comma ) header(0) = ByteParser.OpenB.toByte
+                this.synchronized{
+                  offset = offset + 1
+                  batches.append( ( new SparkChunk(Seq(header)),offset.offset ) )
+                }
+              }
+              return None
             case _ =>
               val arrayKeyTuple = ByteParser.searchKeyRight(buffer, bytesRead, arrayStartIndex)
               arrayKeyTuple match {
@@ -65,10 +71,9 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
                   val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
                   if (headerEnding != -1) { //header before array 
                     var header = buffer.slice(startIndex, headerEnding + 1)
-                    println("header first value... is this always a } bracket? --> " +  header(0).toChar)
                     //this header object is not at the beginning of the file
-                    if ( header(0).toInt == ByteParser.Comma ) header(0) == ByteParser.OpenB.toByte
-                    header(headerEnding) = ByteParser.CloseB.toByte
+                    if ( header(0).toInt == ByteParser.Comma ) header(0) = ByteParser.OpenB.toByte
+                    if ( header(headerEnding).toInt != ByteParser.CloseB) header(headerEnding) = ByteParser.CloseB.toByte
                     this.synchronized{
                       offset = offset + 1
                       batches.append( ( new SparkChunk(Seq(header)),offset.offset ) )
