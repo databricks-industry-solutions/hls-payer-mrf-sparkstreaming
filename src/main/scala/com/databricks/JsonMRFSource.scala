@@ -17,7 +17,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   private var offset: LongOffset = LongOffset(-1)
   private var batches = ListBuffer.empty[(SparkChunk, Long)]
   private val BufferSize = 268435456 //256MB
-//  private val BufferSize = 536870912 //512MB
 
   private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
   private val fs = FileSystem.get(hadoopConf)
@@ -33,145 +32,106 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   }
 
   val reader = new Thread(){
-    var bytesRead = 0
-    var fileOffset = 0L
-    var buffer = new Array[Byte](BufferSize)
+    /*
+     * Recursive attempt at parsing. Return value is umatched array Bytes that need to be merged with next buffer read
+     */
+    def parse(bytesRead: Int, buffer: Array[Byte], startIndex: Int, headerKey: Option[String]): Array[Byte] = {
+      println("DEBUG START: startIndex:" + startIndex + " - headerKey:" + headerKey)
+      println("DEBUG END: ")
+
+      headerKey match {
+        case Some("provider_references") =>
+          ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)  match {
+            case (_, ByteParser.EOB) => ??? //array cut in half
+            case (x,y) => //full record found within a byteArray
+              //println("Correctly have gotten to this point, ending array value is " + y+1)
+              this.synchronized {
+                offset = offset + 1
+                batches.append( (new SparkChunk(Seq(buffer.slice(startIndex, x+1))), offset.offset ) )
+              }
+              return parse(bytesRead - y+1, buffer.slice(y+1, bytesRead), 0, None)
+          }
+        case Some("in_network") => ???
+
+        case _ => //indicates we are at a header level
+          val arrayStartIndex = ByteParser.parseUntilArrayLeft(buffer, bytesRead) //the outermost [ wrapping a header array
+          arrayStartIndex match {
+            case ByteParser.EOB => return buffer //TODO must have one pass outside of recursion to process remaining bytes in Array
+            case _ =>
+              val arrayKeyTuple = ByteParser.searchKeyRight(buffer, bytesRead, arrayStartIndex)
+              arrayKeyTuple match {
+                case (None, _) => ??? //this is where we cannot find the key in our buffer... edge case will not do this for now
+                case (Some(x), _) =>
+                  val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
+                  if (headerEnding != -1) { //header before array 
+                    var header = buffer.slice(startIndex, headerEnding + 1)
+                    println("header first value... is this always a } bracket? --> " +  header(0).toChar)
+                    //this header object is not at the beginning of the file
+                    if ( header(0).toInt == ByteParser.Comma ) header(0) == ByteParser.OpenB.toByte
+                    header(headerEnding) = ByteParser.CloseB.toByte
+                    this.synchronized{
+                      offset = offset + 1
+                      batches.append( ( new SparkChunk(Seq(header)),offset.offset ) )
+                    }
+                  }
+                  val innerArrayIndex = ByteParser.findByteLeft(buffer, ByteParser.OpenB, arrayStartIndex+1, bytesRead).min(ByteParser.findByteLeft(buffer, ByteParser.OpenL, arrayStartIndex+1, bytesRead)) //can this be -1 and therefore be wrong?
+                  return parse(bytesRead,buffer, innerArrayIndex, Some(x))//no header between arrays
+                case _ => throw new Exception("Should not get here")
+              }
+          }
+      }
+    }
 
     override def run(){
-      /* Read header until provider_references or in_network
+      val buffer = new Array[Byte](BufferSize)
+      val internalBufSize = inStream.available
+      val bytesRead = inStream.read(buffer,0, BufferSize)
+      val rv = parse(bytesRead, buffer, 0, None)
 
-      while ((bytesRead = inStream.read(buffer,fileOffset, BufferSize)) >= 0){
-        fileOffset += bytesRead
-        /*
-         *  Cheat and find rightmost offset...  
-         */
+    }
+    def runs(){
+
+      val buffer = new Array[Byte](BufferSize)
+      val internalBufSize = inStream.available //usually this is 2GB
+      val bytesRead = inStream.read(buffer,0, BufferSize)
+
+
+      //Read and parse Header Json, create a smaller buffer to copy this data into
+      val arrayStartIndex = ByteParser.parseUntilArrayLeft(buffer, bytesRead)
+      val arrayKeyTuple = ByteParser.searchKeyRight(buffer, bytesRead, arrayStartIndex) //returns array key and the beginning location of the key
+      val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
+      var header = buffer.slice(0, headerEnding + 1) 
+      header(headerEnding) = ByteParser.CloseB.toByte
+
+      this.synchronized{
+        offset = offset + 1 
+        batches.append( ( new SparkChunk(Seq(header)),offset.offset ) )
       }
 
-      //Read Trailer until provider_references or in_network
+      //Read Array Json, more headers, etc
+      var startIndex = ByteParser.findByteLeft(buffer, ByteParser.OpenB, headerEnding+1, bytesRead)
+      var validCheckpoint = -1
+      var endIndex = -1
+      var prevChunk = Seq[Array[Byte]]()
 
-      //Stream.continually(inStream.read)
-      //.takeWhile(_ != -1)
-      //.foreach(println)
-      //Batch read until end of array...
+      arrayKeyTuple._1 match {
+        case Some("provider_references") =>
+          ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)  match {
+            case (_, ByteParser.EOB) => ??? //array cut in half
+            case (x,y) => //full record found within a byteArray
+              this.synchronized {
+                offset = offset + 1
+                batches.append( (new SparkChunk(Seq(buffer.slice(arrayStartIndex, y+1))), offset.offset ) )
+              }
+              prevChunk :+ buffer.slice(x+1, bytesRead)
+          }
 
-      //Read header until in_network or provider_references or end
-
-      if (JsonParser.stack.length != 0) throw new Exception("Unexpected end of file")
-      if (JsonParser.batch.length > 1) { //header info at the end of the file
-        this.synchronized{
-          offset = offset + 1
-          batches.append((UTF8String.fromString("{" + JsonParser.batch.mkString),offset.offset))
-        }
-       }
-       
-      //close resources
-      inStream.close
-      fileStream.close
-      fs.close
-
-       //stop the streaming context here
-       */
+        case Some("in_network") => ???
+        case _ => ???
+      }
     }
   }
 
-  /*
-   * For now, assume valid in-network schema
-   *  https://github.com/CMSgov/price-transparency-guide/tree/master/schemas/in-network-rates
-   *
-  object JsonParser {
-    var prev = -1 //previouisly seen byte
-    var isQuoted = false  //are we inbetween quotes? 
-    var batch = ListBuffer.empty[Char] //the current batch we are building to write out   
-    var stack = Stack.empty[Int]  //stack object to help determine how far nested the JSON is
- 
-    var isKey = true //if we are currently reading in a key value, starts out as true
-    var headerKey = ListBuffer.empty[Char] //the last key we have read in the header
-
-    //stack size is <= 1
-    def parseHeader(i: Int): Unit = {
-      i match {
-        case Comma =>
-          if ( !isQuoted ) {
-            isKey = true
-            headerKey = ListBuffer.empty[Char]
-          }
-          batch.append(i.toChar)
-        case CloseL =>
-          this.synchronized{
-            offset = offset + 1
-            batches.append((UTF8String.fromString("{\"" + headerKey.mkString + "\":" + batch.mkString + "}"),offset.offset))
-          }
-          batch = ListBuffer.empty[Char]
-          headerKey = ListBuffer.empty[Char]
-
-        case Colon => if ( !isQuoted ) {
-          isKey = !isKey
-          /*
-           * Here, we see a key that needs to be seperated out into seperate records.
-           *  This is the beginning of exiting the header
-           */
-          if (headerKey.mkString.toLowerCase == "provider_references" || headerKey.mkString.toLowerCase == "in_network"){
-            if (headerKey.mkString.toLowerCase == "provider_references") batch = batch.dropRight(22) //remove this key and write out our batch
-            if (headerKey.mkString.toLowerCase == "in_network") batch = batch.dropRight(13) //remove this key and write out our batch
-            //causes indexoutofbounds error if (batch(0) == Comma.toChar) batch(0) = OpenB.toChar
-            this.synchronized{
-              offset = offset + 1
-              batches.append((UTF8String.fromString(batch.mkString + "}"), offset.offset))
-            }
-            batch = ListBuffer.empty[Char]
-          }
-          else{
-            batch.append(i.toChar)
-          }
-        }
-      }
-    }
-
-    def parse(i: Int): Unit = {
-      i match {
-        case x if Whitespace.contains(x) =>  if ( isQuoted ) batch.append(i.toChar)
-        case Quote => if ( prev != Escape ) isQuoted = !isQuoted
-          batch.append(i.toChar)
-        case Colon => if (isHeaderJson) parseHeader(i) else batch.append(i.toChar)
-        case OpenB => if ( !isQuoted && prev != Escape ) stack.push(i.toChar)
-          batch.append(i.toChar)
-        case OpenL =>
-          if ( !isHeaderJson ) batch.append(i.toChar) //if this is a header value we won't write it out (e.g. break apart a list as a seperate json object). The parseHeader()->Colon writes out batch prior to OpenL being seen
-          if ( !isQuoted && prev != Escape )  stack.push(i.toChar)
-        case CloseL =>
-          if ( !isQuoted && prev != Escape ){
-            if ( stack.top == OpenL ) stack.pop
-            else throw new Exception("Sequence mismatch -> Found: " + CloseL.toChar.toString + " Expected Matching: " + stack.top.toChar.toString )
-          }
-          if ( isHeaderJson ) parseHeader(i)
-          else batch.append(i.toChar)
-
-        case CloseB =>
-          if ( !isQuoted && prev != Escape ) {
-            if ( stack.top == OpenB ) stack.pop
-            else throw new Exception("Sequence mismatch -> Found: " + CloseB.toChar.toString + " Expected Matching: " + stack.top.toChar.toString )
-          }
-          batch.append(i.toChar)
-        case Comma =>
-          if(isHeaderJson) parseHeader(i)
-          else if(stack.length > 2) batch.append(i.toChar)
-          else { //a place where we want to create a split 
-            this.synchronized{
-              offset = offset + 1
-              batches.append((UTF8String.fromString("{\"" + headerKey.mkString + "\":" + batch.mkString + "}"), offset.offset))
-            }
-            batch = ListBuffer.empty[Char]
-          }
-        case _ => if(isHeaderJson && isKey) headerKey.append(i.toChar)
-          batch.append(i.toChar)
-      }
-      prev = i
-    }
-    def isHeaderJson(): Boolean = (stack.length <= 1)
-
-
-  }
-   */
   reader.start()
 
   //Not sure why convert method was removed from LongOffset
@@ -191,6 +151,8 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       case _ => LongOffset(-1)
     }).offset+1
 
+    println(s"generating batch range $start ; $end")
+
     val data = batches
       .par
       .filter { case (_, idx) => idx >= s && idx <= e}
@@ -209,10 +171,15 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   override def commit(end: Offset): Unit = this.synchronized {
     val committed = (end match {
       case lo: LongOffset => lo
-      case _ => LongOffset(-1)
-    }).offset
+      case _ => LongOffset(-1) 
+    }).offset + 1
     val toKeep = batches.filter { case (_, idx) => idx > committed }
+
+    println(s"after clean size ${toKeep.length}")
+    println(s"deleted: ${batches.size - toKeep.size}")
+
     batches = toKeep
+
   }
 }
 
