@@ -14,42 +14,47 @@ import org.apache.spark.unsafe.types.UTF8String
 import org.apache.hadoop.fs.{FileSystem, Path}
 
 class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) extends Source {
-  private var offset: LongOffset = LongOffset(-1)
-  private var batches = ListBuffer.empty[(SparkChunk, Long)]
-  private val BufferSize = 268435456 //256MB
+  var offset: LongOffset = LongOffset(-1)
+  var batches = ListBuffer.empty[(SparkChunk, Long)]
+  val BufferSize = 268435456 //256MB
 
-  private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
-  private val fs = FileSystem.get(hadoopConf)
-  private val fileStream = fs.open(new Path(options.get("path").get))
-  private val inStream = options.get("path").get match {
-    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), BufferSize) //128MB buffer
-    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, BufferSize) //128MB buffer
+  val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+  val fs = FileSystem.get(hadoopConf)
+  val fileStream = fs.open(new Path(options.get("path").get))
+  val inStream = options.get("path").get match {
+    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), 8192) //Gzip compression testing
+    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, BufferSize) //256MB buffer
     case _ => throw new Exception("codec for file extension not implemented yet")
   }
   override def schema: StructType = JsonMRFSource.schema
   override def getOffset: Option[Offset] = this.synchronized {
     if (offset == -1) None else Some(offset)
   }
-
  
-  val reader = new Thread(){
+  private def reader = new Thread("Json File Reader") {
+    setDaemon(true)
     /*
      * Recursive attempt at parsing. Return value is umatched array Bytes that need to be merged with next buffer read
+     *  Return value is a tuple of (<leftover unprocessed bytes from array>, headerKey)
      */
-    def parse(bytesRead: Int, buffer: Array[Byte], startIndex: Int, headerKey: Option[String]): Option[Array[Byte]] = {
-      println("DEBUG START: startIndex:" + startIndex + " - headerKey:" + headerKey)
-      println("DEBUG END: ")
-
+    def parse(bytesRead: Int, buffer: Array[Byte], startIndex: Int, headerKey: Option[String]): (Option[Array[Byte]],  Option[String]) = {
       headerKey match {
         case Some("provider_references") | Some("in_network") =>
-          ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)  match {
+          val endOfArray = ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)
+          endOfArray match { //TODO what if there is no valid endOf the Array in our Byte String?
+            case (ByteParser.EOB, ByteParser.EOB) =>
+              return (None, headerKey)
+            case (-1, _) =>
+              throw new Exception("Unable to find a cuttoff within a buffer") 
             case (x, ByteParser.EOB) => //array has been cut between bytes
               this.synchronized {
                 offset = offset + 1
                 batches.append( (new SparkChunk(Seq(Array('['.toByte), buffer.slice(startIndex, x+1), Array(']'.toByte))), offset.offset ) )
               }
-              return Some(buffer.slice(x+1, bytesRead)) //return leftovers
-            case (x,y) => //full record found within a byteArray. Y = outer array end, x = last element inside array end
+              //make sure the next start point is either a { or [
+              val i = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, x+1, bytesRead)
+              return (Some(buffer.slice(i, bytesRead)),headerKey) //return leftovers
+            case (x,y) => //full recrd found within a byteArray. Y = outer array end, x = last element inside array end
               this.synchronized {
                 offset = offset + 1
                 batches.append( (new SparkChunk(Seq(Array('['.toByte), buffer.slice(startIndex, x+1), Array(']'.toByte))), offset.offset ) )
@@ -57,7 +62,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
               return parse(bytesRead - (y+1), buffer.slice(y+1, bytesRead), 0, None)
           }
         case _ => //indicates we are at a header level
-          val arrayStartIndex = ByteParser.parseUntilArrayLeft(buffer, bytesRead) //the outermost [ wrapping a header array
+          val arrayStartIndex = ByteParser.parseUntilArrayLeft(buffer, bytesRead) //TODO should this be startIndex? the outermost [ wrapping a header array
           arrayStartIndex match {
             case ByteParser.EOB => //no more arrays, is any more header items remaining?
               if ( ByteParser.findByteRight(buffer, ByteParser.Colon, bytesRead-1, bytesRead) > 0  ){
@@ -68,12 +73,12 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
                   batches.append( ( new SparkChunk(Seq(header)),offset.offset ) )
                 }
               }
-              return None
+              return (None, None)
             case _ =>
               val arrayKeyTuple = ByteParser.searchKeyRight(buffer, bytesRead, arrayStartIndex)
               arrayKeyTuple match {
-                case (None, _) => ??? //this is where we cannot find the key in our buffer... edge case will not do this for now
-                case (Some(x), _) =>
+                case (None, _) => ??? //this is where we cannot find the key in our buffer... edge case will not implement
+                case (Some(x), _) => 
                   val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
                   if (headerEnding != -1) { //header before array
                     var header = buffer.slice(startIndex, headerEnding + 1)
@@ -85,67 +90,61 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
                       batches.append( ( new SparkChunk(Seq(header)),offset.offset ) )
                     }
                   }
-                  val innerArrayIndex = ByteParser.findByteLeft(buffer, ByteParser.OpenB, arrayStartIndex+1, bytesRead).min(ByteParser.findByteLeft(buffer, ByteParser.OpenL, arrayStartIndex+1, bytesRead)) //can this be -1 and therefore be wrong?
+                  val innerArrayIndex = ByteParser.findByteArrayBeginningLeft(buffer,arrayStartIndex+1, bytesRead)
                   return parse(bytesRead,buffer, innerArrayIndex, Some(x))//no header between arrays
                 case _ => throw new Exception("Should not get here")
               }
           }
-      }
+        }
     }
     /*
      *
      */
-    override def run(){
+    override def run(): Unit = {
       val buffer = new Array[Byte](BufferSize)
       val internalBufSize = inStream.available
-      val bytesRead = inStream.read(buffer,0, BufferSize)
-      val rv = parse(bytesRead, buffer, 0, None)
-      
+      println("Internal buffer size: " + internalBufSize)
+      var bytesRead = 0
+      var totalBytesRead = 0L
+      var bytesRemaining = 0
+      var bufferRemaining = Array[Byte]()
+      var headerKey = None: Option[String]
+      var parsingByteSize = 0
+      var parsingBuffer = Array[Byte]()
+      while ( {bytesRead = inStream.read(buffer,0, BufferSize); bytesRead} != -1 ) {
+        //read in data
+        totalBytesRead += bytesRead
 
-    }
-    def runs(){
+        println("Total bytes read so far: " + totalBytesRead)
+        //copy leftovers if any
+        parsingByteSize = bytesRead + bytesRemaining
+        if ( bytesRemaining > 0 ) {
+          parsingBuffer = bufferRemaining ++ buffer
+        }
+        else parsingBuffer = buffer
 
-      val buffer = new Array[Byte](BufferSize)
-      val internalBufSize = inStream.available //usually this is 2GB
-      val bytesRead = inStream.read(buffer,0, BufferSize)
-
-
-      //Read and parse Header Json, create a smaller buffer to copy this data into
-      val arrayStartIndex = ByteParser.parseUntilArrayLeft(buffer, bytesRead)
-      val arrayKeyTuple = ByteParser.searchKeyRight(buffer, bytesRead, arrayStartIndex) //returns array key and the beginning location of the key
-      val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
-      var header = buffer.slice(0, headerEnding + 1) 
-      header(headerEnding) = ByteParser.CloseB.toByte
-
-      this.synchronized{
-        offset = offset + 1 
-        batches.append( ( new SparkChunk(Seq(header)),offset.offset ) )
+        //Parse and get leftovers
+        var rv = parse(parsingByteSize, parsingBuffer, 0, headerKey)
+        rv._1 match {
+          case None =>
+            bytesRemaining = 0
+            bufferRemaining = Array[Byte]()
+          case Some(x) =>
+            bytesRemaining = x.size
+            bufferRemaining = x
+        }
+        headerKey = rv._2
       }
 
-      //Read Array Json, more headers, etc
-      var startIndex = ByteParser.findByteLeft(buffer, ByteParser.OpenB, headerEnding+1, bytesRead)
-      var validCheckpoint = -1
-      var endIndex = -1
-      var prevChunk = Seq[Array[Byte]]()
-
-      arrayKeyTuple._1 match {
-        case Some("provider_references") =>
-          ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)  match {
-            case (_, ByteParser.EOB) => ??? //array cut in half
-            case (x,y) => //full record found within a byteArray
-              this.synchronized {
-                offset = offset + 1
-                batches.append( (new SparkChunk(Seq(buffer.slice(arrayStartIndex, y+1))), offset.offset ) )
-              }
-              prevChunk :+ buffer.slice(x+1, bytesRead)
-          }
-
-        case Some("in_network") => ???
-        case _ => ???
-      }
+      //Close out resources
+      println("Sleeping prior to closing resources")
+      Thread.sleep(10000)
+      inStream.close
+      fileStream.close
+      fs.close
+      println("Resources closed")
     }
   }
-
   reader.start()
 
   //Not sure why convert method was removed from LongOffset
@@ -186,14 +185,14 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     val committed = (end match {
       case lo: LongOffset => lo
       case _ => LongOffset(-1) 
-    }).offset + 1
+    }).offset
     val toKeep = batches.filter { case (_, idx) => idx > committed }
 
+    println(s"the deleted offset:" + committed)
     println(s"after clean size ${toKeep.length}")
     println(s"deleted: ${batches.size - toKeep.size}")
 
     batches = toKeep
-
   }
 }
 
