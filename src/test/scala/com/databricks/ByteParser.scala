@@ -1,10 +1,63 @@
-import com.databricks.labs.sparkstreaming.jsonmrf._
+package com.databricks.labs.sparkstreaming.jsonmrf
+
+import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest._
 import org.apache.spark.sql.SparkSession
 import org.apache.hadoop.fs.{FileSystem, Path}
 import java.io.{InputStreamReader, BufferedInputStream}
 import java.util.zip.GZIPInputStream
- 
-val spark = SparkSession.builder().master("local[2]").config("spark.driver.memory", "4G").appName("Spark Streaming Example").config("spark.driver.bindAddress","127.0.0.1").getOrCreate()
+
+
+class ByteParserTest extends StreamingTest with BeforeAndAfter{
+
+  test("parseArrayLeft()"){
+    ???
+  }
+
+  test("getQuotedStringRight()"){
+    ???
+  }
+
+  test("arrayHasNext()"){
+    ???
+  }
+
+  test("findByteRight() / findByteLeft()"){
+    ???
+  }
+
+  test("skipWhiteSpaceRight() / skipWhiteSpaceLeft()"){
+    ???
+  }
+
+  test("findArrayBeginningLeft()"){
+    ???
+  }
+
+  test("findByteArrayEndingLeft()"){
+    ???
+  }
+
+  test("seekEndOfArray()"){
+    ???
+  }
+
+  test("skipWhiteSpaceAndComma()"){
+    ???
+  }
+
+  test("seekMatchingEndBracket()"){
+    ???
+  }
+
+  test("seekNextArrayElementLeft()"){
+    ???
+  }
+
+
+}
+
+/*
 spark.sparkContext.setLogLevel("ERROR")
 val hadoopConf = spark.sqlContext.sparkSession.sessionState.newHadoopConf()
 val fs = FileSystem.get(hadoopConf)
@@ -95,3 +148,4 @@ df.writeStream
     .queryName("movies")
     .option("checkpointLocation", "src/test/resources/chkpoint_dir")
     .start("src/test/resources/output")
+ */
