@@ -33,7 +33,19 @@ df.writeStream
 
 Schema definition that is parsed is the CMS in-network file. https://github.com/CMSgov/price-transparency-guide/tree/master/schemas/in-network-rates
 
-## Data Sample
+## Sample Data 
+
+```python 
+#120MB file TODO
+
+```
+
+```python
+#3.6G zipped, 120G unzipped file TODO
+```
+
+
+## Data Output
 
 ``` bash
 more  src/test/resources/output/part-00000-a6af8cf3-6162-4d60-9acb-8933bac19b8b-c000.txt
@@ -50,4 +62,5 @@ On a local Macbook with xmx8g running at 5-10GB per minute. Note of caution, thi
 This project serves as an example to implement Apache Spark custom Structured Streaming Sources. 
 
 This project is accompanied by [Spark Custom Stream Sources](https://hackernoon.com/spark-custom-stream-sources-ec360b8ae240)
+
 
