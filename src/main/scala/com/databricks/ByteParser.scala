@@ -157,7 +157,7 @@ object ByteParser{
 
 
   /*
-   * startIndex is expected to be beginning object in json Array '{' or '['
+   * startIndex is expected to be after the outer [, and either start on or before first element in json Array '{' or '['
    *  @return (idx of last valid array element end, idx of end of array) 
    */
   def seekEndOfArray(arr: Array[Byte], startIndexTmp: Int, arrLength: Int): (Int, Int) = {
@@ -171,7 +171,7 @@ object ByteParser{
     var validCutoff = -1 
     var i: Int = startIndex
     do{
-      seekMatchingEndBracket(arr, i+1, arrLength) match {
+      seekMatchingEndBracket(arr, i, arrLength) match {
         case EOB => return (validCutoff, EOB) //Buffer cuts a record in half
         case x => //x becomes our new validcutoff point
           validCutoff = x
@@ -203,7 +203,14 @@ object ByteParser{
    *   this could be called at the end of a list where the only remaining value is a } or ]
    *  
    */
-  def seekMatchingEndBracket(arr: Array[Byte], startIndex: Int, arrLength: Int): Int = {
+  def seekMatchingEndBracket(arr: Array[Byte], startIndexTmp: Int, arrLength: Int): Int = {
+    val startIndex = skipWhiteSpaceLeft(arr, startIndexTmp, arrLength)
+    startIndex match {
+      case EOB => return EOB
+      case x =>
+        if ( arr(startIndex).toInt != OpenB && arr(startIndex).toInt != OpenL ) throw new Exception("Did not see a correct opening brace/bracket to start function. startIndex " +startIndex + " Last Byte consumed: " + arr(startIndex).toChar)
+    }
+
     var prev = -1
     var stack = Stack.empty[Int]
     var isQuoted = false
@@ -211,14 +218,14 @@ object ByteParser{
       arr(i).toInt match {
         case OpenB => if ( !isQuoted && prev != Escape ) stack.push(OpenB)
         case CloseB => if ( !isQuoted && prev != Escape) {
-          if ( stack.isEmpty )  return i
-          else if( stack.top != OpenB ) throw new Exception("Sequence mismatch! found } and expecting matching " + stack.top.toChar)
+          if( stack.top != OpenB ) throw new Exception("Sequence mismatch! found } and expecting matching " + stack.top.toChar)
+          if ( stack.size == 1 )  return i
           else stack.pop
         }
         case OpenL => if ( !isQuoted && prev != Escape ) stack.push(OpenL)
         case CloseL => if ( !isQuoted && prev != Escape ) {
-          if ( stack.isEmpty )	return i
-          else if ( stack.top != OpenL ) throw new Exception("Sequence mismatch! found ] and expecting matching " + stack.top.toChar)
+          if ( stack.top != OpenL ) throw new Exception("Sequence mismatch! found ] and expecting matching " + stack.top.toChar)
+          if ( stack.size ==1 )	return i
           else stack.pop
         }
         case Quote => if ( prev != Escape ) isQuoted = !isQuoted
