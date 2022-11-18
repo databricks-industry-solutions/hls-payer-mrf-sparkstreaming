@@ -4,7 +4,9 @@ Spark Custom Stream Source and Sink for Payer MRF Use Case
 ## Running
 
 ``` python
-df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load("/Users/aaron.zavora//Downloads/umr-tpa-encore-in-network-rates.json")
+df = spark.readStream
+    .format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider")
+    .load("/Users/aaron.zavora//Downloads/umr-tpa-encore-in-network-rates.json")
 
 df.writeStream
     .outputMode("append")
