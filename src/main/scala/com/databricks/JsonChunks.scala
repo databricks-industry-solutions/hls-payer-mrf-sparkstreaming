@@ -11,32 +11,3 @@ case class SparkChunk(chunk: Seq[Array[Byte]]){
     UTF8String.fromBytes( chunk.reduce((x,y) => x ++y ) )
   }
 }
-
-/*
- * Represents a buffered read stream byte array 
-
-case class JsonChunk(
-  buf: Array[Byte],
-  size: Int,
-  startIndex: Int,
-  endIndex: Int
-){
-  def toSlice(): Array[Byte] ={
-    buf.slice(startIndex, endIndex)
-  }
-
-  /*
-   * When get cut in half copy into a new array 
-   */
-  def getLeftoversHead(): JsonChunk = {
-    return new JsonChunk(buf.slice(0, startIndex), startIndex + 1, 0, startIndex)
-  }
-
-  /*
-   * When records get cut in half copy into new array 
-   */
-  def getLeftoversTail(): JsonChunk = {
-    return new JsonChunk(buf.slice(endIndex, size - 1), size - endIndex -1,endIndex, size-endIndex-1)
-  }
-}
- */
