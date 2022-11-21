@@ -65,13 +65,13 @@ object ByteParser{
   }
 
   // @param startIndex expected the end of an element of an array, either '}' or ']'.
-  // @return found: index of the beginning of next array element, e.g. the non-whitespace value after ','
+  // @return found: index of the beginning of next array element, e.g. first value after ',' (this could be whitespace)
   //        not-found: -1 
   def arrayHasNext(arr: Array[Byte], startIndex: Int, arrLength: Int): Int = {
     if ( arr(startIndex).toInt != CloseB && arr(startIndex).toInt != CloseL ) throw new Exception("Did not see a correct startIndex of a json element to determine if the array ended. Please make sure this value is either } or ]")
     var i = findByteArrayEndingLeft(arr, startIndex+1, arrLength)
     var j = findByteLeft(arr, Comma, startIndex+1, i)
-    if ( j >= 0 && j < i ) return j+1
+    if ( j >= 0 && j < i ) return skipWhiteSpaceLeft(arr, j+1, arrLength)
     else if ( i == EOB ) return EOB
     else return -1
   }
@@ -142,7 +142,7 @@ object ByteParser{
   }
 
   /*
-   *
+   * Finding a closing brace or bracket ']' at the startIndex
    */
   def findByteArrayEndingLeft(arr: Array[Byte], startIndex: Int, arrLength: Int): Int = {
     for ( i <- startIndex to arrLength -1){
@@ -236,37 +236,6 @@ object ByteParser{
     return EOB
   }
 
-  /* 
-   * Finds start of next array element. returns index of opening B
-   */
-  def seekNextArrayElementLeft(arr: Array[Byte], startIndex: Int, arrLength: Int): Int = {
-    if ( arr(startIndex).toInt != CloseB ) throw new Exception("Starting position isn't an opening Json bracket Element. Starting Index: " + startIndex)
-    var prev = -1
-    var stack = Stack.empty[Int]
-    var isQuoted = false
-    for ( i <- startIndex to arrLength-1 ) {
-      arr(i).toInt match {
-        case OpenB => if ( !isQuoted && prev != Escape ) stack.push(OpenB)
-        case CloseB => if ( !isQuoted && prev != Escape) {
-          if ( stack.top != OpenB ) throw new Exception("Sequence mismatch! found } and expecting matching " + stack.top.toChar)
-          else {
-            stack.pop
-            if ( stack.isEmpty ) //this is the end of the list item, return next opening { position
-              return findByteLeft(arr, OpenB, i, arrLength)
-          }
-        }
-        case OpenL => if ( !isQuoted && prev != Escape ) stack.push(OpenL)
-        case CloseL => if ( !isQuoted && prev != Escape ) {
-          if ( stack.top != OpenL ) throw new Exception("Sequence mismatch! found ] and expecting matching " + stack.top.toChar)
-          else stack.pop
-        }
-        case Quote => if ( prev != Escape ) isQuoted = !isQuoted
-        case _ => 
-      }
-      prev = arr(i).toInt
-    }
-    return EOB
-  }
 
   val Whitespace = Seq(32, 9, 13, 10) //space, tab, CR, LF
   val Escape = 92
