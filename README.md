@@ -6,8 +6,8 @@ Spark Custom Stream Source and Sink for Payer MRF Use Case
 ``` python
 #Spark Settings
 spark.rpc.message.maxSize 1024
-spark.driver.memory 16g
-spark.driver.cores 3
+spark.driver.memory 12g
+spark.driver.cores 2
 
 #JVM Settings (8g or higher)
 JAVA_OPTS=-Xmx8g -Xms8g
