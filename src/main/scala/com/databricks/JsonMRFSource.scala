@@ -1,5 +1,6 @@
 package com.databricks.labs.sparkstreaming.jsonmrf
 
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import collection.mutable.{Stack, ListBuffer}
 import java.util.zip.GZIPInputStream
 import java.io.{InputStreamReader, BufferedInputStream}
@@ -8,19 +9,23 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, Source}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, SQLContext, Row, Dataset}
+import org.apache.spark.sql.{DataFrame, SQLContext, Row}
 import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
+import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.unsafe.types.UTF8String
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.SerializableWritable
 
 class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) extends Source {
   var offset: LongOffset = LongOffset(-1)
-  var batches = ListBuffer.empty[(SparkChunk, Long)]
+  var batches = ListBuffer.empty[((Long,Long), Long)] // (tuple of (tuple of file start offset, file end offset), spark offset)
   val BufferSize = 268435456 //256MB
 
-  val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+  @transient lazy val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
   val fs = FileSystem.get(hadoopConf)
-  val fileStream = fs.open(new Path(options.get("path").get))
+  val fileName = new Path(options.get("path").get)
+  val fileStream = fs.open(fileName)
   val inStream = options.get("path").get match {
     case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), 8192) //Gzip compression testing
     case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, BufferSize) //256MB buffer
@@ -30,14 +35,14 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   override def getOffset: Option[Offset] = this.synchronized {
     if (offset == -1) None else Some(offset)
   }
- 
+
   private def reader = new Thread("Json File Reader") {
     setDaemon(true)
     /*
      * Recursive attempt at parsing. Return value is umatched array Bytes that need to be merged with next buffer read
      *  Return value is a tuple of (<leftover unprocessed bytes from array>, headerKey)
      */
-    def parse(bytesRead: Int, buffer: Array[Byte], startIndex: Int, headerKey: Option[String]): (Option[Array[Byte]],  Option[String]) = {
+    def parse(bytesRead: Int, buffer: Array[Byte], startIndex: Int, headerKey: Option[String], fileOffset: Long): (Option[Array[Byte]],  Option[String]) = {
       headerKey match {
         case Some("provider_references") | Some("in_network") =>
           val endOfArray = ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)
@@ -49,7 +54,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
             case (x, ByteParser.EOB) => //array has been cut between bytes
               this.synchronized {
                 offset = offset + 1
-                batches.append( (new SparkChunk(Seq(Array('['.toByte), buffer.slice(startIndex, x+1), Array(']'.toByte))), offset.offset ) )
+                batches.append(( (startIndex + fileOffset, x+fileOffset), offset.offset ) )
               }
               //make sure the next start point is either a { or [
               val i = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, x+1, bytesRead)
@@ -57,12 +62,12 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
             case (x,y) => //full recrd found within a byteArray. Y = outer array end, x = last element inside array end
               this.synchronized {
                 offset = offset + 1
-                batches.append( (new SparkChunk(Seq(Array('['.toByte), buffer.slice(startIndex, x+1), Array(']'.toByte))), offset.offset ) )
+                batches.append(( (startIndex + fileOffset, x + fileOffset), offset.offset ))
               }
-              return parse(bytesRead - (y+1), buffer.slice(y+1, bytesRead), 0, None)
+              return parse(bytesRead, buffer, (y+1), None, fileOffset)
           }
         case _ => //indicates we are at a header level
-          val arrayStartIndex = ByteParser.parseUntilArrayLeft(buffer, bytesRead) //TODO should this be startIndex? the outermost [ wrapping a header array
+          val arrayStartIndex = ByteParser.parseUntilArrayLeft(buffer, bytesRead, startIndex) //TODO should this be startIndex? the outermost [ wrapping a header array
           arrayStartIndex match {
             case ByteParser.EOB => //no more arrays, is any more header items remaining?
               if ( ByteParser.findByteRight(buffer, ByteParser.Colon, bytesRead-1, bytesRead) > 0  ){
@@ -70,29 +75,29 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
                 if ( header(0).toInt == ByteParser.Comma ) header(0) = ByteParser.OpenB.toByte
                 this.synchronized{
                   offset = offset + 1
-                  batches.append( ( new SparkChunk(Seq(header)),offset.offset ) )
+                  batches.append(( (startIndex + fileOffset, bytesRead-1 + fileOffset),offset.offset ))
                 }
               }
               return (None, None)
             case _ =>
               val arrayKeyTuple = ByteParser.searchKeyRight(buffer, bytesRead, arrayStartIndex)
               arrayKeyTuple match {
-                case (None, _) => ??? //this is where we cannot find the key in our buffer... edge case will not implement
+                case (None, _) =>
+                  ??? //this is where we cannot find the key in our buffer... edge case will not implement
                 case (Some(x), _) => 
                   val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
                   if (headerEnding != -1) { //header before array
+                    println("headerEnding " + headerEnding) 
                     var header = buffer.slice(startIndex, headerEnding + 1)
-                    //this header object is not at the beginning of the file
-                    if ( header(0).toInt == ByteParser.Comma ) header(0) = ByteParser.OpenB.toByte
-                    if ( header(headerEnding).toInt != ByteParser.CloseB) header(headerEnding) = ByteParser.CloseB.toByte
                     this.synchronized{
                       offset = offset + 1
-                      batches.append( ( new SparkChunk(Seq(header)),offset.offset ) )
+                      batches.append(( (startIndex + fileOffset, headerEnding+1 + fileOffset ) ,offset.offset ) )
                     }
                   }
                   val innerArrayIndex = ByteParser.findByteArrayBeginningLeft(buffer,arrayStartIndex+1, bytesRead)
-                  return parse(bytesRead,buffer, innerArrayIndex, Some(x))//no header between arrays
-                case _ => throw new Exception("Should not get here")
+                  return parse(bytesRead,buffer, innerArrayIndex, Some(x), fileOffset)//no header between arrays
+                case _ =>
+                  ???
               }
           }
         }
@@ -103,7 +108,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     override def run(): Unit = {
       val buffer = new Array[Byte](BufferSize)
       val internalBufSize = inStream.available
-      println("Internal buffer size: " + internalBufSize)
       var bytesRead = 0
       var totalBytesRead = 0L
       var bytesRemaining = 0
@@ -124,7 +128,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
         else parsingBuffer = buffer
 
         //Parse and get leftovers
-        var rv = parse(parsingByteSize, parsingBuffer, 0, headerKey)
+        var rv = parse(parsingByteSize, parsingBuffer, 0, headerKey, totalBytesRead - bytesRead)
         rv._1 match {
           case None =>
             bytesRemaining = 0
@@ -143,6 +147,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       fileStream.close
       fs.close
       println("Resources closed")
+      //sqlContext.sparkContext.streamingContext.stop(false, true) do not stop spark context, wait for all records to be processed
     }
   }
   reader.start()
@@ -150,7 +155,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   //Not sure why convert method was removed from LongOffset
   //Old version https://jar-download.com/artifacts/org.apache.spark/spark-sql_2.12/2.4.0/source-code/org/apache/spark/sql/execution/streaming/LongOffset.scala
   //New version https://jar-download.com/artifacts/org.apache.spark/spark-sql_2.12/3.2.1/source-code/org/apache/spark/sql/execution/streaming/LongOffset.scala
-  override def getBatch(start: Option[Offset], end: Offset): DataFrame = this.synchronized {
+  override def getBatch(start: Option[Offset], end: Offset): DataFrame =  this.synchronized {
 
     val s = start.flatMap({ off =>
       off match {
@@ -164,19 +169,20 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       case _ => LongOffset(-1)
     }).offset+1
 
-    println(s"generating batch range $start ; $end")
+    println(s"generating spark batch range $start ; $end")
 
-    val data = batches
-      .par
-      .filter { case (_, idx) => idx >= s && idx <= e}
-      .map{  case(v, _) => InternalRow(v.toSeq) }
-      .seq
+    val catalystRows =  sqlContext
+      .sparkSession
+      .sparkContext
+      .parallelize(batches.filter{ case (_, idx) => idx >= s && idx <= e})
+      .map({ case (v, _) => InternalRow(UTF8String.fromString(v._1.toString)) })
 
-    val plan = new LocalRelation(Seq(AttributeReference("data", StringType)()), data, isStreaming=true)
-    val qe = sqlContext.sparkSession.sessionState.executePlan(plan)
-    qe.assertAnalyzed()
-
-    new Dataset(sqlContext.sparkSession, plan, RowEncoder(qe.analyzed.schema)).toDF
+    //sqlContext.internalCreateDataFrame(rdd, JsonMRFSource.schema, isStreaming=true)
+    val logicalPlan = LogicalRDD(
+      JsonMRFSource.schemaAttributes,
+      catalystRows,
+      isStreaming = true)(sqlContext.sparkSession)
+    org.apache.spark.sql.Dataset.ofRows(sqlContext, logicalPlan)
   }
 
   override def stop(): Unit = reader.stop
@@ -198,4 +204,5 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
 
 object JsonMRFSource {
   lazy val schema = StructType(List(StructField("json_payload", StringType))) //we're defining a generic string type for our JSON payloads
+  lazy val schemaAttributes = Seq(AttributeReference("json_payload", StringType, nullable = true)())
 }
