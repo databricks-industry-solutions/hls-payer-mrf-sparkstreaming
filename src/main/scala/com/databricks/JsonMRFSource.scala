@@ -145,7 +145,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       Thread.sleep(10000)
       inStream.close
       fileStream.close
-      fs.close
       println("Resources closed")
       //sqlContext.sparkContext.streamingContext.stop(false, true) do not stop spark context, wait for all records to be processed
     }
@@ -156,7 +155,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   //Old version https://jar-download.com/artifacts/org.apache.spark/spark-sql_2.12/2.4.0/source-code/org/apache/spark/sql/execution/streaming/LongOffset.scala
   //New version https://jar-download.com/artifacts/org.apache.spark/spark-sql_2.12/3.2.1/source-code/org/apache/spark/sql/execution/streaming/LongOffset.scala
   override def getBatch(start: Option[Offset], end: Offset): DataFrame =  this.synchronized {
-
     val s = start.flatMap({ off =>
       off match {
         case lo: LongOffset => Some(lo)
@@ -171,18 +169,20 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
 
     println(s"generating spark batch range $start ; $end")
 
-    val catalystRows =  sqlContext
-      .sparkSession
-      .sparkContext
-      .parallelize(batches.filter{ case (_, idx) => idx >= s && idx <= e})
-      .map({ case (v, _) => InternalRow(UTF8String.fromString(v._1.toString)) })
-
+    val catalystRows = new JsonMRFRDD(
+      sqlContext.sparkContext,
+      batches.par.filter{ case (_, idx) => idx >= s && idx <= e}.zipWithIndex.map({ case (v, idx2) => JsonPartition(start=v._1._1, end=v._1._2, idx2)}).toArray,
+      fileName
+    )
     //sqlContext.internalCreateDataFrame(rdd, JsonMRFSource.schema, isStreaming=true)
     val logicalPlan = LogicalRDD(
       JsonMRFSource.schemaAttributes,
       catalystRows,
-      isStreaming = true)
-    new Dataset.ofRows(sqlContext, logicalPlan)
+      isStreaming = true)(sqlContext.sparkSession)
+
+    val qe = sqlContext.sparkSession.sessionState.executePlan(logicalPlan)
+    qe.assertAnalyzed()
+    new org.apache.spark.sql.Dataset(sqlContext.sparkSession, logicalPlan, RowEncoder(qe.analyzed.schema))
   }
 
   override def stop(): Unit = reader.stop

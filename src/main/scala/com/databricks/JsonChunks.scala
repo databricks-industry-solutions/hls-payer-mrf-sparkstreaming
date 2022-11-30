@@ -1,13 +1,15 @@
 package com.databricks.labs.sparkstreaming.jsonmrf
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.{InterruptibleIterator, Partition, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.hadoop.fs.{FileSystem, Path}
 import java.io.BufferedInputStream
+import scala.util.Random
 
-case class FileChunk(start: Long, end: Long, idx: Int) extends Partition{
+case class JsonPartition(start: Long, end: Long, idx: Int) extends Partition{
   override def index: Int = idx
 }
 
@@ -16,21 +18,23 @@ case class FileChunk(start: Long, end: Long, idx: Int) extends Partition{
  */
 private class JsonMRFRDD(
   sc: SparkContext,
-  partitions: Array[Partition],
-  fileName: String, //    url: String,
-  chunk: FileChunk, //options: JDBCOptions,
-  numPartitions: Int)
+  partitions: Array[JsonPartition],
+  fileName: Path)
     extends RDD[InternalRow](sc, Nil) {
 
-  override def getPartitions: Array[Partition] = partitions
+  override def getPartitions: Array[Partition] = {
+    partitions.indices.map { i =>
+      new JsonPartition(partitions(i).start, partitions(i).end, i).asInstanceOf[Partition]
+    }.toArray
+  }
 
   //Only ever returning one "row" with the iterator...
   //Maybe change this in the future to break apart the json object further into individual rows?
   override def compute(thePart: Partition, context: TaskContext): Iterator[InternalRow] =  {
     //Close out fis, bufferinputstream objects, etc
-    val fs = FileSystem.get(sc.hadoopConfiguration)
-    val in = fs.open(new Path(fileName))
-    val part = thePart.asInstanceOf[FileChunk]
+    val fs = FileSystem.get(new Configuration)
+    val in = fs.open(fileName)
+    val part = thePart.asInstanceOf[JsonPartition]
 
     in.seek(part.start)
     val inStream = new BufferedInputStream(in)
@@ -46,4 +50,9 @@ private class JsonMRFRDD(
       .toArray
     Seq(InternalRow(UTF8String.fromBytes(bytes))).toIterator
   }
+}
+
+
+object JsonMRFRDD{
+
 }
