@@ -38,10 +38,10 @@ Schema definition that is parsed is the CMS in-network file. https://github.com/
 
 ```python
 #3.6G zipped, 120G unzipped file 
-#download to local storage
+#download to local storage "Command took 17.75 minutes"
 wget -O ./2022-08-01_umr_inc_tpa_encore_non_evaluated_gap_enc-in-network-rates.json.gz https://uhc-tic-mrf.azureedge.net/public-mrf/2022-08-01/2022-08-01_UMR--Inc-_TPA_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz
 
-#unzip to DBFS 
+#unzip to DBFS  "Command took 26.83 minutes"
 gunzip -cd ./2022-08-01_umr_inc_tpa_encore_non_evaluated_gap_enc-in-network-rates.json.gz > /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-08-01_umr_inc_tpa_encore_non_evaluated_gap_enc-in-network-rates.json 
 ```
 
