@@ -181,8 +181,8 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     val logicalPlan = LogicalRDD(
       JsonMRFSource.schemaAttributes,
       catalystRows,
-      isStreaming = true)(sqlContext.sparkSession)
-    org.apache.spark.sql.Dataset.ofRows(sqlContext, logicalPlan)
+      isStreaming = true)
+    new Dataset.ofRows(sqlContext, logicalPlan)
   }
 
   override def stop(): Unit = reader.stop
