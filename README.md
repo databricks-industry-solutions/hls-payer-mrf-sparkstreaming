@@ -33,7 +33,7 @@ df.writeStream
 
 Schema definition that is parsed is the CMS in-network file. https://github.com/CMSgov/price-transparency-guide/tree/master/schemas/in-network-rates
 
-## Unzipping Recommended First due to compression level which may cause performance issues in buffering...
+## Unzipping First Recommended
 
 
 ```python
