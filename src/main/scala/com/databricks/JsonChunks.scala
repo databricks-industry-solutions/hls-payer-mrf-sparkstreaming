@@ -41,13 +41,15 @@ private class JsonMRFRDD(
 
     context.addTaskCompletionListener[Unit] { context =>  {
       inStream.close
-      in.close()
+      in.close
     }}
 
     val bytes = Iterator.continually(inStream.read)
       .take( (part.end - part.start + 1).asInstanceOf[Int] ) //amount of bytes read should never be more than Int (~ < 3G)
       .map(_.toByte)
       .toArray
+    inStream.close
+    in.close
     Seq(InternalRow(UTF8String.fromBytes(bytes))).toIterator
   }
 }
