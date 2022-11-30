@@ -58,7 +58,7 @@ more  src/test/resources/output/part-00000-a6af8cf3-6162-4d60-9acb-8933bac19b8b-
 
 ## Speed 
 
-On a local Macbook with xmx8g running at 2.5GB per minute. Note of caution, this program depends on buffering. Some forms of .gz extension do not enable efficient buffering in the JVM. It is recommended to gunzip -d the file first prior to running
+On a Spark driver with xmx8g performs at ~2.5GB per minute. Note of caution, this program depends on buffering. Some forms of .gz extension do not enable efficient buffering in the JVM. It is recommended to unzip first (as mentioned above)
 
 This project serves as an example to implement Apache Spark custom Structured Streaming Sources. 
 
