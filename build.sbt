@@ -15,14 +15,11 @@ lazy val sparkDependencies = Seq(
   "org.apache.hadoop" % "hadoop-hdfs" % "3.3.0"
 ).map(_ % " provided")
 
-assembly / assemblyMergeStrategy := {
-  case PathList("org", "apache", "spark", "unused", xs@_*) => MergeStrategy.last
-  case x =>
-    val oldStrategy = (assembly / assemblyMergeStrategy).value
-    oldStrategy(x)
-}
-
 lazy val testDependencies = Seq("org.scalatest" %% "scalatest" % "3.2.14" % Test)
+
+val coreDependencies = Seq(
+  "com.google.guava" %% "guava" % "12.0"
+)
 
 libraryDependencies ++= sparkDependencies ++ testDependencies
 

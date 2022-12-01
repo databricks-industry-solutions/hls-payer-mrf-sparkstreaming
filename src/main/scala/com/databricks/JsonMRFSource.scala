@@ -22,7 +22,8 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   var batches = ListBuffer.empty[((Long,Long), Long)] // (tuple of (tuple of file start offset, file end offset), spark offset)
   val BufferSize = 268435456 //256MB
 
-  @transient lazy val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+  val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+  val confBroadcast = sqlContext.sparkContext.broadcast(new SerializableWritable(hadoopConf))
   val fs = FileSystem.get(hadoopConf)
   val fileName = new Path(options.get("path").get)
   val fileStream = fs.open(fileName)
@@ -87,7 +88,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
                 case (Some(x), _) => 
                   val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
                   if (headerEnding != -1) { //header before array
-                    println("headerEnding " + headerEnding) 
                     var header = buffer.slice(startIndex, headerEnding + 1)
                     this.synchronized{
                       offset = offset + 1
@@ -171,6 +171,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
 
     val catalystRows = new JsonMRFRDD(
       sqlContext.sparkContext,
+      confBroadcast,
       batches.par.filter{ case (_, idx) => idx >= s && idx <= e}.zipWithIndex.map({ case (v, idx2) => JsonPartition(start=v._1._1, end=v._1._2, idx2)}).toArray,
       fileName
     )
