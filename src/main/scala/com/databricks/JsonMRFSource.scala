@@ -21,12 +21,13 @@ import org.apache.spark.SerializableWritable
 /*
  * Represents a streaming source of a json Payer MRF In Network File
  *  map['path'] -> fqPath of the json resource
+ *  map['buffersize'] -> override the default buffersize 256MB for streaming file (not recommended)
  *
  */
 class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) extends Source {
   var offset: LongOffset = LongOffset(-1)
   var batches = ListBuffer.empty[(JsonPartition, Long)] // (tuple of (tuple of file start offset, file end offset), spark offset)
-  val BufferSize = 268435456 //256MB
+  val BufferSize: Int = options.get("buffersize").getOrElse(268435456).asInstanceOf[Int] //256MB is default but allowed to override
 
   val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
   val confBroadcast = sqlContext.sparkContext.broadcast(new SerializableWritable(hadoopConf))
@@ -54,6 +55,14 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
      * Recursive attempt at parsing. Return value is umatched array Bytes that need to be merged with next buffer read
      *  Return value is a tuple of (<leftover unprocessed bytes from array>, headerKey)
      *  Side Effect, update shared memory "batches" and "offset" with relevant information to a split
+     * 
+     *  @param bytesRead -> how many readable bytes exist in our buffer
+     *  @param buffer -> Array of bytes
+     *  @param startIndex -> Indicating the start position in the array to start parsing (needed in order to use recursion)
+     *  @param headerKey -> The last headerKey that has been seen if embedded in an array
+     *  @param fileoffset -> The total fileOffset we are at with buffer(0)
+     *  
+     *  @return Array of unprocessed bytes, headerKey if we are embedded in an array
      */
     def parse(bytesRead: Int, buffer: Array[Byte], startIndex: Int, headerKey: Option[String], fileOffset: Long): (Option[Array[Byte]],  Option[String]) = {
       headerKey match {
@@ -87,7 +96,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
               if ( ByteParser.findByteRight(buffer, ByteParser.Colon, bytesRead-1, bytesRead) > 0  ){
                 this.synchronized{
                   offset = offset + 1
-                  batches.append(( new JsonPartition(startIndex + fileOffset, bytesRead-1 + fileOffset),offset.offset ))
+                  batches.append(( new JsonPartition(ByteParser.skipWhiteSpaceAndCommaLeft(buffer ,startIndex, bytesRead) + fileOffset, bytesRead-1 + fileOffset),offset.offset ))
                 }
               }
               return (None, None)
@@ -95,13 +104,13 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
               val arrayKeyTuple = ByteParser.searchKeyRight(buffer, bytesRead, arrayStartIndex)
               arrayKeyTuple match {
                 case (None, _) =>
-                  ??? //this is where we cannot find the key in our buffer... edge case will not implement
+                  ??? //this is where we cannot find the key in our buffer... edge case not implemented
                 case (Some(x), _) => 
                   val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
                   if (headerEnding != -1) { //header before array
                     this.synchronized{
                       offset = offset + 1
-                      batches.append(( new JsonPartition(startIndex + fileOffset, headerEnding+1 + fileOffset) ,offset.offset ) )
+                      batches.append(( new JsonPartition(ByteParser.skipWhiteSpaceAndCommaLeft(buffer, startIndex, bytesRead) + fileOffset, ByteParser.skipWhiteSpaceAndCommaRight(buffer, headerEnding, bytesRead) + fileOffset) ,offset.offset ) )
                     }
                   }
                   val innerArrayIndex = ByteParser.findByteArrayBeginningLeft(buffer,arrayStartIndex+1, bytesRead)

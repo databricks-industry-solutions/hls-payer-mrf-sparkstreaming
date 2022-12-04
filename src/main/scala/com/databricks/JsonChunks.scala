@@ -40,9 +40,17 @@ private class JsonMRFRDD(
     //Close out fis, bufferinputstream objects, etc
     val part = thePart.asInstanceOf[JsonPartition]
     in.seek(part.start)
-    val buffer = new Array[Byte](( part.end - part.start + 1).toInt)
+    var buffer = new Array[Byte](( part.end - part.start + 1).toInt)
     ByteStreams.readFully(in, buffer)
     in.close
+    //Make the header data valid JSON values
+    if (part.headerKey == ""){
+      //startByte and the endBytes should be '{' or '}' in a header
+      if( buffer(ByteParser.skipWhiteSpaceLeft(buffer, 0, (part.end - part.start + 1).toInt)) != ByteParser.OpenB )
+        buffer = Array('{'.toByte) ++ buffer
+      if( buffer(ByteParser.skipWhiteSpaceRight(buffer, (part.end - part.start).toInt, (part.end - part.start + 1).toInt)) != ByteParser.CloseB)
+        buffer = buffer  :+ '}'.toByte
+    }
     Seq(InternalRow(UTF8String.fromString(fileName.getName), UTF8String.fromString(part.headerKey), UTF8String.fromBytes(buffer))).toIterator
   }
 }
