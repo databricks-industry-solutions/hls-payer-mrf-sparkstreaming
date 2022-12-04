@@ -136,12 +136,12 @@ import org.apache.spark.sql.SparkSession
   spark.sparkContext.setLogLevel("ERROR")
   val df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load("src/test/resources/test.json")
 
-  df.writeStream
-    .outputMode("append")
-    .option("truncate", "false")
-    .format("console")
-    .start
-    .awaitTermination
+ df.writeStream
+ .trigger(availableNow=true)
+ .outputMode("append")
+ .option("truncate", "false")
+ .format("console")
+ .start
 
 
 }

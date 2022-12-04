@@ -13,7 +13,7 @@ import scala.util.Random
 import org.apache.spark.SerializableWritable
 import org.apache.spark.broadcast.Broadcast
 
-case class JsonPartition(start: Long, end: Long, idx: Int) extends Partition{
+case class JsonPartition(start: Long, end: Long,  headerKey: String = "", idx: Int = 0 ) extends Partition{
   override def index: Int = idx
 }
 
@@ -29,7 +29,7 @@ private class JsonMRFRDD(
 
   override def getPartitions: Array[Partition] = {
    partitions.indices.map { i =>
-      new JsonPartition(partitions(i).start, partitions(i).end, i).asInstanceOf[Partition]
+      new JsonPartition(partitions(i).start, partitions(i).end, partitions(i).headerKey, i).asInstanceOf[Partition]
     }.toArray
    }
 
@@ -37,17 +37,13 @@ private class JsonMRFRDD(
   //Maybe change this in the future to break apart the json object further into individual rows?
   override def compute(thePart: Partition, context: TaskContext): Iterator[InternalRow] =  {
     val in = JsonMRFRDD.fs.open(fileName)
-    println("Starting computation on fileOffset: " + thePart.asInstanceOf[JsonPartition].start + " : and current position in the inputstream" + in.getPos)
     //Close out fis, bufferinputstream objects, etc
     val part = thePart.asInstanceOf[JsonPartition]
     in.seek(part.start)
-    println("the updated position offset after seeking" + in.getPos + "\nstarting the byte consumption")
-
     val buffer = new Array[Byte](( part.end - part.start + 1).toInt)
     ByteStreams.readFully(in, buffer)
     in.close
-    println("Finished computing fileOffset: " + thePart.asInstanceOf[JsonPartition].start)
-    Seq(InternalRow(UTF8String.fromBytes(buffer))).toIterator
+    Seq(InternalRow(UTF8String.fromString(fileName.getName), UTF8String.fromString(part.headerKey), UTF8String.fromBytes(buffer))).toIterator
   }
 }
 
