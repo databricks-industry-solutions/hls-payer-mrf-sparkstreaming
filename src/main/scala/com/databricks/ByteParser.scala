@@ -186,6 +186,10 @@ object ByteParser{
     return (validCutoff, EOB)
   }
 
+  /*
+   * Return the first position that does not contain a comma or whitespace starting at startindex
+   *  move left to right
+   */
   def skipWhiteSpaceAndCommaLeft(arr: Array[Byte], startIndex: Int, arrLength: Int): Int = {
     for ( i <- startIndex to arrLength -1 ) {
       arr(i).toInt match {
@@ -197,6 +201,20 @@ object ByteParser{
     return EOB
   }
 
+    /*
+   * Return the first position that does not contain a comma or whitespace starting at startindex
+   *  move left to right
+   */
+  def skipWhiteSpaceAndCommaRight(arr: Array[Byte], startIndex: Int, arrLength: Int): Int = {
+    for ( i <- startIndex to 0 by -1) {
+      arr(i).toInt match {
+        case x if Whitespace.contains(x) =>
+        case Comma =>
+        case _ => return i 
+      }
+    }
+    return EOB
+  }
 
   /*
    * Assume just seen an openingB or openingL, find the index of the closingB/closeL that matches
