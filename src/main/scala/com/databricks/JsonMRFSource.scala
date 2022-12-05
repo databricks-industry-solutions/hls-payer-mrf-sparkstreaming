@@ -73,7 +73,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
             case (ByteParser.EOB, ByteParser.EOB) =>  //what if there is no valid array split OR end of Array in our Byte String?
               return (Some(buffer), headerKey)
             case (-1, _) =>
-              throw new Exception("Unable to find a cuttoff within a buffer") //Expect at minimum to find a split in buffersize
+              throw new Exception("Error: Unable to find a split within buffer. FileOffset: " + fileOffset + "\tstartIndex:" + startIndex ) //Expect at minimum to find a split in buffersize
             case (x, ByteParser.EOB) => //Array has not ended, but x is a valid offset to save
               this.synchronized {
                 offset = offset + 1
@@ -107,10 +107,14 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
                   ??? //this is where we cannot find the key in our buffer... edge case not implemented
                 case (Some(x), _) => 
                   val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
-                  if (headerEnding != -1) { //header before array
-                    this.synchronized{
-                      offset = offset + 1
-                      batches.append(( new JsonPartition(ByteParser.skipWhiteSpaceAndCommaLeft(buffer, startIndex, bytesRead) + fileOffset, ByteParser.skipWhiteSpaceAndCommaRight(buffer, headerEnding, bytesRead) + fileOffset) ,offset.offset ) )
+                  if (headerEnding != -1) { //maybe a header before array
+                    val headerStartIndex = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, startIndex, bytesRead)
+                    val headerEndIndex = ByteParser.skipWhiteSpaceAndCommaRight(buffer, headerEnding, bytesRead)
+                    if( headerStartIndex < headerEndIndex){
+                      this.synchronized{
+                        offset = offset + 1
+                        batches.append(( new JsonPartition(headerStartIndex + fileOffset, headerEndIndex + fileOffset) ,offset.offset ) )
+                      }
                     }
                   }
                   val innerArrayIndex = ByteParser.findByteArrayBeginningLeft(buffer,arrayStartIndex+1, bytesRead)

@@ -149,16 +149,17 @@ import org.apache.spark.sql.SparkSession
 
 
 
- import com.databricks.labs.sparkstreaming.jsonmrf._
- import org.apache.spark.sql.SparkSession
- val spark = SparkSession.builder().master("local").config("spark.driver.memory", "8G").config("spark.driver.cores", 2).config("spark.executor.instances", 2).appName("Spark Streaming Example").config("spark.driver.bindAddress","127.0.0.1").getOrCreate()
+import com.databricks.labs.sparkstreaming.jsonmrf._
+import org.apache.spark.sql.SparkSession
+val spark = SparkSession.builder().master("local").config("spark.driver.memory", "8G").config("spark.driver.cores", 2).config("spark.executor.instances", 2).appName("Spark Streaming Example").config("spark.driver.bindAddress","127.0.0.1").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
-val df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load("/Users/aaron.zavora//Downloads/umr-tpa-encore-in-network-rates.json")
 
-df.writeStream
-    .outputMode("append")
-    .format("text")
-    .queryName("movies")
-    .option("checkpointLocation", "src/test/resources/chkpoint_dir")
-    .start("src/test/resources/output")
+ val df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load("/Users/aaron.zavora//Downloads/umr-tpa-encore-in-network-rates.json")
+
+ df.writeStream
+ .outputMode("append")
+ .format("parquet")
+ .queryName("umr-tpa-encore")
+ .option("checkpointLocation", "src/test/resources/chkpoint_dir")
+ .start("src/test/resources/output")
  */

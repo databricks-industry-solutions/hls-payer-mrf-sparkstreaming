@@ -40,6 +40,7 @@ private class JsonMRFRDD(
     //Close out fis, bufferinputstream objects, etc
     val part = thePart.asInstanceOf[JsonPartition]
     in.seek(part.start)
+
     var buffer = new Array[Byte](( part.end - part.start + 1).toInt)
     ByteStreams.readFully(in, buffer)
     in.close
