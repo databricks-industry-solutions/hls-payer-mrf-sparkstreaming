@@ -234,7 +234,8 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     batches = toKeep
     if ( end.asInstanceOf[LongOffset].offset >= lastOffset.offset ){
       StreamingContext.getActive match {
-        case Some(x) => x.stop(false, true) //end the context gracefully
+        Thread.sleep(1000)
+        case Some(x) => x.stop(true, true) //end the context gracefully
         case _ => //nothing to do since there is no active streaming context
       }
     }
