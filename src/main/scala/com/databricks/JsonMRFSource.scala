@@ -4,6 +4,7 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import collection.mutable.{Stack, ListBuffer}
 import java.util.zip.GZIPInputStream
 import java.io.{InputStreamReader, BufferedInputStream}
+import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
@@ -26,6 +27,7 @@ import org.apache.spark.SerializableWritable
  */
 class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) extends Source {
   var offset: LongOffset = LongOffset(-1)
+  var lastOffset: LongOffset = LongOffset(-2)
   var batches = ListBuffer.empty[(JsonPartition, Long)] // (tuple of (tuple of file start offset, file end offset), spark offset)
   val BufferSize: Int = options.get("buffersize").getOrElse(268435456).asInstanceOf[Int] //256MB is default but allowed to override
 
@@ -75,17 +77,17 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
             case (-1, _) =>
               throw new Exception("Error: Unable to find a split within buffer. FileOffset: " + fileOffset + "\tstartIndex:" + startIndex ) //Expect at minimum to find a split in buffersize
             case (x, ByteParser.EOB) => //Array has not ended, but x is a valid offset to save
+              val i = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, x+1, bytesRead)
               this.synchronized {
                 offset = offset + 1
-                batches.append(( new JsonPartition(startIndex + fileOffset, x+fileOffset, headerKey.get), offset.offset ) )
+                batches.append(( new JsonPartition(startIndex + fileOffset, i+fileOffset, headerKey.get), offset.offset ) )
               }
               //make sure the next start point is either a { or [
-              val i = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, x+1, bytesRead)
-              return (Some(buffer.slice(i, bytesRead)),headerKey) //return leftovers
+              return (Some(buffer.slice(i, bytesRead)),headerKey ) //return leftovers
             case (x,y) => //full recrd found within a byteArray. Y = outer array end, x = last element inside array end
               this.synchronized {
                 offset = offset + 1
-                batches.append(( new JsonPartition(startIndex + fileOffset, x + fileOffset, headerKey.get), offset.offset ))
+                batches.append(( new JsonPartition(startIndex + fileOffset, y + fileOffset, headerKey.get), offset.offset ))
               }
               return parse(bytesRead, buffer, (y+1), None, fileOffset)
           }
@@ -151,7 +153,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
         else parsingBuffer = buffer
 
         //Parse byte array and save off the return bytes which are not part of an offset block yet
-        var rv = parse(parsingByteSize, parsingBuffer, 0, headerKey, totalBytesRead - bytesRead)
+        var rv = parse(parsingByteSize, parsingBuffer, 0, headerKey, totalBytesRead - parsingByteSize )
         rv._1 match {
           case None =>
             bytesRemaining = 0
@@ -163,8 +165,9 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
         headerKey = rv._2
       }
 
+      this.synchronized { lastOffset = offset }
       //Close out resources
-      println("Sleeping prior to closing resources")
+      println("Final offset written to Spark " + offset.offset + "\nSleeping prior to closing resources")
       Thread.sleep(10000)
       inStream.close
       fileStream.close
@@ -229,6 +232,12 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     println(s"deleted: ${batches.size - toKeep.size}")
 
     batches = toKeep
+    if ( end.asInstanceOf[LongOffset].offset >= lastOffset.offset ){
+      StreamingContext.getActive match {
+        case Some(x) => x.stop(false, true) //end the context gracefully
+        case _ => //nothing to do since there is no active streaming context
+      }
+    }
   }
 }
 
