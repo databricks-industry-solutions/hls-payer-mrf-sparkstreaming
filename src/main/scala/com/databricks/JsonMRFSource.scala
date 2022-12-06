@@ -23,6 +23,7 @@ import org.apache.spark.SerializableWritable
  * Represents a streaming source of a json Payer MRF In Network File
  *  map['path'] -> fqPath of the json resource
  *  map['buffersize'] -> override the default buffersize 256MB for streaming file (not recommended)
+ *  map['filesystem'] -> 's3a' to turn on performance optimizations for s3a 
  *
  */
 class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) extends Source {
@@ -32,8 +33,14 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   val BufferSize: Int = options.get("buffersize").getOrElse(268435456).asInstanceOf[Int] //256MB is default but allowed to override
 
   val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
-  val confBroadcast = sqlContext.sparkContext.broadcast(new SerializableWritable(hadoopConf))
-  val fs = FileSystem.get(hadoopConf)
+  val fs =  options.get("filesystem") match {
+    case Some("s3a") =>
+      println("Conf --> setting filesystem to fs.s3a.S3AFileSystem")
+      hadoopConf.set("fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem")
+      hadoopConf.set("fs.s3.aws.credentials.provider", "com.amazonaws.auth.EnvironmentVariableCredentialsProvider")
+      FileSystem.get(hadoopConf)
+    case _ =>  FileSystem.get(hadoopConf)
+  }
   val fileName = new Path(options.get("path").get)
   val fileStream = fs.open(fileName)
   val inStream = options.get("path").get match {
@@ -167,7 +174,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
 
       this.synchronized { lastOffset = offset }
       //Close out resources
-      println("Final offset written to Spark " + offset.offset + "\nSleeping prior to closing resources")
       Thread.sleep(10000)
       inStream.close
       fileStream.close
@@ -199,7 +205,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
      */
     val catalystRows = new JsonMRFRDD(
       sqlContext.sparkContext,
-      confBroadcast,
       batches.par.filter{ case (_, idx) => idx >= s && idx <= e}.zipWithIndex.map({ case (v, idx2) => new JsonPartition(v._1.start, v._1.end, v._1.headerKey, idx2)}).toArray,
       fileName
     )
@@ -234,8 +239,9 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     batches = toKeep
     if ( end.asInstanceOf[LongOffset].offset >= lastOffset.offset ){
       StreamingContext.getActive match {
-        Thread.sleep(1000)
-        case Some(x) => x.stop(true, true) //end the context gracefully
+        case Some(x) =>
+          Thread.sleep(1000)
+          x.stop(true, true) //end the context gracefully
         case _ => //nothing to do since there is no active streaming context
       }
     }

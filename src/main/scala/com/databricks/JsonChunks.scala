@@ -22,7 +22,6 @@ case class JsonPartition(start: Long, end: Long,  headerKey: String = "", idx: I
  */
 private class JsonMRFRDD(
   sc: SparkContext,
-  confBroadcast: Broadcast[SerializableWritable[Configuration]],
   partitions: Array[JsonPartition],
   fileName: Path)
     extends RDD[InternalRow](sc, Nil) {
