@@ -1,6 +1,6 @@
 name := "payer-mrf-streamsource"
 
-version := "0.1"
+version := "0.2"
 
 lazy val scala212 = "2.12.8"
 lazy val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "3.2.1")
@@ -18,9 +18,15 @@ lazy val sparkDependencies = Seq(
 lazy val testDependencies = Seq("org.scalatest" %% "scalatest" % "3.2.14" % Test)
 
 val coreDependencies = Seq(
-  "com.google.guava" %% "guava" % "12.0"
+  "com.google.guava" % "guava" % "12.0",
+  "org.apache.hadoop" % "hadoop-aws" % "3.3.0"
 )
 
-libraryDependencies ++= sparkDependencies ++ testDependencies
+libraryDependencies ++= sparkDependencies ++ testDependencies ++ coreDependencies
 
-assemblyJarName := s"${name.value}-${version.value}.jar"
+assemblyJarName := s"${name.value}-${version.value}_assembly.jar"
+
+artifactName := { (sv: ScalaVersion, module: ModuleID, artifact: Artifact) =>
+  s"${name.value}-${version.value}." + artifact.extension
+}
+

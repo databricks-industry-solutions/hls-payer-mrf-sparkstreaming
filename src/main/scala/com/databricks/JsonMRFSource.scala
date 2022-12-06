@@ -4,6 +4,7 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import collection.mutable.{Stack, ListBuffer}
 import java.util.zip.GZIPInputStream
 import java.io.{InputStreamReader, BufferedInputStream}
+import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
@@ -22,16 +23,24 @@ import org.apache.spark.SerializableWritable
  * Represents a streaming source of a json Payer MRF In Network File
  *  map['path'] -> fqPath of the json resource
  *  map['buffersize'] -> override the default buffersize 256MB for streaming file (not recommended)
+ *  map['filesystem'] -> 's3a' to turn on performance optimizations for s3a 
  *
  */
 class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) extends Source {
   var offset: LongOffset = LongOffset(-1)
+  var lastOffset: LongOffset = LongOffset(-2)
   var batches = ListBuffer.empty[(JsonPartition, Long)] // (tuple of (tuple of file start offset, file end offset), spark offset)
   val BufferSize: Int = options.get("buffersize").getOrElse(268435456).asInstanceOf[Int] //256MB is default but allowed to override
 
   val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
-  val confBroadcast = sqlContext.sparkContext.broadcast(new SerializableWritable(hadoopConf))
-  val fs = FileSystem.get(hadoopConf)
+  val fs =  options.get("filesystem") match {
+    case Some("s3a") =>
+      println("Conf --> setting filesystem to fs.s3a.S3AFileSystem")
+      hadoopConf.set("fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem")
+      hadoopConf.set("fs.s3.aws.credentials.provider", "com.amazonaws.auth.EnvironmentVariableCredentialsProvider")
+      FileSystem.get(hadoopConf)
+    case _ =>  FileSystem.get(hadoopConf)
+  }
   val fileName = new Path(options.get("path").get)
   val fileStream = fs.open(fileName)
   val inStream = options.get("path").get match {
@@ -73,19 +82,19 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
             case (ByteParser.EOB, ByteParser.EOB) =>  //what if there is no valid array split OR end of Array in our Byte String?
               return (Some(buffer), headerKey)
             case (-1, _) =>
-              throw new Exception("Unable to find a cuttoff within a buffer") //Expect at minimum to find a split in buffersize
+              throw new Exception("Error: Unable to find a split within buffer. FileOffset: " + fileOffset + "\tstartIndex:" + startIndex ) //Expect at minimum to find a split in buffersize
             case (x, ByteParser.EOB) => //Array has not ended, but x is a valid offset to save
+              val i = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, x+1, bytesRead)
               this.synchronized {
                 offset = offset + 1
-                batches.append(( new JsonPartition(startIndex + fileOffset, x+fileOffset, headerKey.get), offset.offset ) )
+                batches.append(( new JsonPartition(startIndex + fileOffset, i+fileOffset, headerKey.get), offset.offset ) )
               }
               //make sure the next start point is either a { or [
-              val i = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, x+1, bytesRead)
-              return (Some(buffer.slice(i, bytesRead)),headerKey) //return leftovers
+              return (Some(buffer.slice(i, bytesRead)),headerKey ) //return leftovers
             case (x,y) => //full recrd found within a byteArray. Y = outer array end, x = last element inside array end
               this.synchronized {
                 offset = offset + 1
-                batches.append(( new JsonPartition(startIndex + fileOffset, x + fileOffset, headerKey.get), offset.offset ))
+                batches.append(( new JsonPartition(startIndex + fileOffset, y + fileOffset, headerKey.get), offset.offset ))
               }
               return parse(bytesRead, buffer, (y+1), None, fileOffset)
           }
@@ -107,10 +116,14 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
                   ??? //this is where we cannot find the key in our buffer... edge case not implemented
                 case (Some(x), _) => 
                   val headerEnding = ByteParser.findByteRight(buffer, ByteParser.Comma, arrayKeyTuple._2, bytesRead)
-                  if (headerEnding != -1) { //header before array
-                    this.synchronized{
-                      offset = offset + 1
-                      batches.append(( new JsonPartition(ByteParser.skipWhiteSpaceAndCommaLeft(buffer, startIndex, bytesRead) + fileOffset, ByteParser.skipWhiteSpaceAndCommaRight(buffer, headerEnding, bytesRead) + fileOffset) ,offset.offset ) )
+                  if (headerEnding != -1) { //maybe a header before array
+                    val headerStartIndex = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, startIndex, bytesRead)
+                    val headerEndIndex = ByteParser.skipWhiteSpaceAndCommaRight(buffer, headerEnding, bytesRead)
+                    if( headerStartIndex < headerEndIndex){
+                      this.synchronized{
+                        offset = offset + 1
+                        batches.append(( new JsonPartition(headerStartIndex + fileOffset, headerEndIndex + fileOffset) ,offset.offset ) )
+                      }
                     }
                   }
                   val innerArrayIndex = ByteParser.findByteArrayBeginningLeft(buffer,arrayStartIndex+1, bytesRead)
@@ -147,7 +160,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
         else parsingBuffer = buffer
 
         //Parse byte array and save off the return bytes which are not part of an offset block yet
-        var rv = parse(parsingByteSize, parsingBuffer, 0, headerKey, totalBytesRead - bytesRead)
+        var rv = parse(parsingByteSize, parsingBuffer, 0, headerKey, totalBytesRead - parsingByteSize )
         rv._1 match {
           case None =>
             bytesRemaining = 0
@@ -159,8 +172,8 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
         headerKey = rv._2
       }
 
+      this.synchronized { lastOffset = offset }
       //Close out resources
-      println("Sleeping prior to closing resources")
       Thread.sleep(10000)
       inStream.close
       fileStream.close
@@ -192,7 +205,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
      */
     val catalystRows = new JsonMRFRDD(
       sqlContext.sparkContext,
-      confBroadcast,
       batches.par.filter{ case (_, idx) => idx >= s && idx <= e}.zipWithIndex.map({ case (v, idx2) => new JsonPartition(v._1.start, v._1.end, v._1.headerKey, idx2)}).toArray,
       fileName
     )
@@ -225,6 +237,14 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     println(s"deleted: ${batches.size - toKeep.size}")
 
     batches = toKeep
+    if ( end.asInstanceOf[LongOffset].offset >= lastOffset.offset ){
+      StreamingContext.getActive match {
+        case Some(x) =>
+          Thread.sleep(1000)
+          x.stop(true, true) //end the context gracefully
+        case _ => //nothing to do since there is no active streaming context
+      }
+    }
   }
 }
 

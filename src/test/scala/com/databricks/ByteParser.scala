@@ -73,18 +73,24 @@ class ByteParserTest extends StreamingTest with BeforeAndAfter{
 }
 
 /*
-spark.sparkContext.setLogLevel("ERROR")
-val hadoopConf = spark.sqlContext.sparkSession.sessionState.newHadoopConf()
-val fs = FileSystem.get(hadoopConf)
 
-val BufferSize = 268435456 //256MB
-//val fileStream = fs.open(new Path("src/test/resources/test.json"))
-//val fileStream = fs.open(new Path("/Users/aaron.zavora/Downloads/2022-10-05_a7f8868c-12c4-412c-b93b-29288e276377_Aetna-Life-Insurance-Company.json.gz"), BufferSize)
-val fileStream = new GZIPInputStream(fs.open(new Path("/Users/aaron.zavora/Downloads/umr-tpa-encore-in-network-rates.json.gz"), 8192))
-val inStream = new BufferedInputStream(fileStream, BufferSize)
+ import com.databricks.labs.sparkstreaming.jsonmrf._
+ import org.apache.spark.sql.SparkSession
+ import org.apache.hadoop.fs.{FileSystem, Path}
 
-val buffer = new Array[Byte](BufferSize)
-val bytesRead = inStream.read(buffer,0, BufferSize)
+ val spark = SparkSession.builder().master("local[2]").config("spark.driver.memory", "4G").appName("Spark Streaming Example").config("spark.driver.bindAddress","127.0.0.1").getOrCreate()  
+ spark.sparkContext.setLogLevel("ERROR")
+ val hadoopConf = spark.sqlContext.sparkSession.sessionState.newHadoopConf()
+ val fs = FileSystem.get(hadoopConf)
+ val BufferSize = 268435456 //256MB
+ val fileStream = fs.open(new Path("/Users/aaron.zavora//Downloads/umr-tpa-encore-in-network-rates.json"))
+
+ fileStream.seek(
+ val inStream = new BufferedInputStream(fileStream, BufferSize)
+
+ 
+ val buffer = new Array[Byte](BufferSize)
+ val bytesRead = fileStream.read(buffer,0, BufferSize)
 
 val startIndex = 78
 val arrLength = 711
@@ -149,16 +155,20 @@ import org.apache.spark.sql.SparkSession
 
 
 
- import com.databricks.labs.sparkstreaming.jsonmrf._
- import org.apache.spark.sql.SparkSession
- val spark = SparkSession.builder().master("local").config("spark.driver.memory", "8G").config("spark.driver.cores", 2).config("spark.executor.instances", 2).appName("Spark Streaming Example").config("spark.driver.bindAddress","127.0.0.1").getOrCreate()
+import com.databricks.labs.sparkstreaming.jsonmrf._
+import org.apache.spark.sql.SparkSession
+val spark = SparkSession.builder().master("local").config("spark.driver.memory", "8G").config("spark.driver.cores", 2).config("spark.executor.instances", 2).appName("Spark Streaming Example").config("spark.driver.bindAddress","127.0.0.1").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
-val df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load("/Users/aaron.zavora//Downloads/umr-tpa-encore-in-network-rates.json")
 
-df.writeStream
-    .outputMode("append")
-    .format("text")
-    .queryName("movies")
-    .option("checkpointLocation", "src/test/resources/chkpoint_dir")
-    .start("src/test/resources/output")
+ val df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load("/Users/aaron.zavora//Downloads/umr-tpa-encore-in-network-rates.json")
+
+ df.writeStream
+ .outputMode("append")
+ .format("parquet")
+ .queryName("umr-tpa-encore")
+ .option("checkpointLocation", "src/test/resources/chkpoint_dir")
+ .start("src/test/resources/output")
+
+
+
  */

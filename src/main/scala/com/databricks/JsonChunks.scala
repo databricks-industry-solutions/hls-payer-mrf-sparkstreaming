@@ -22,7 +22,6 @@ case class JsonPartition(start: Long, end: Long,  headerKey: String = "", idx: I
  */
 private class JsonMRFRDD(
   sc: SparkContext,
-  confBroadcast: Broadcast[SerializableWritable[Configuration]],
   partitions: Array[JsonPartition],
   fileName: Path)
     extends RDD[InternalRow](sc, Nil) {
@@ -40,6 +39,7 @@ private class JsonMRFRDD(
     //Close out fis, bufferinputstream objects, etc
     val part = thePart.asInstanceOf[JsonPartition]
     in.seek(part.start)
+
     var buffer = new Array[Byte](( part.end - part.start + 1).toInt)
     ByteStreams.readFully(in, buffer)
     in.close
