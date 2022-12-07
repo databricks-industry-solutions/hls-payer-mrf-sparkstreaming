@@ -76,7 +76,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     def parse(bytesRead: Int, buffer: Array[Byte], startIndex: Int, headerKey: Option[String], fileOffset: Long): (Option[Array[Byte]],  Option[String]) = {
       headerKey match {
         //We are starting processing in the middle of a header array
-        case Some("provider_references") | Some("in_network") =>
+        case Some(x) => //"provider_references" or "in_network" for the network rates schema
           val endOfArray = ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)
           endOfArray match { 
             case (ByteParser.EOB, ByteParser.EOB) =>  //what if there is no valid array split OR end of Array in our Byte String?
@@ -177,7 +177,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       Thread.sleep(10000)
       inStream.close
       fileStream.close
-      println("Resources closed")
+      println("Closing driver read stream, last offset delivered " + lastOffset.offset)
     }
   }
   reader.start()
@@ -198,7 +198,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       case _ => LongOffset(-1)
     }).offset+1
 
-    println(s"generating spark batch range $start ; $end")
+    //println(s"generating spark batch range $start ; $end")
 
     /*
      * Capture valid byte offsets to be committed
@@ -237,14 +237,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     println(s"deleted: ${batches.size - toKeep.size}")
 
     batches = toKeep
-    if ( end.asInstanceOf[LongOffset].offset >= lastOffset.offset ){
-      StreamingContext.getActive match {
-        case Some(x) =>
-          Thread.sleep(1000)
-          x.stop(true, true) //end the context gracefully
-        case _ => //nothing to do since there is no active streaming context
-      }
-    }
   }
 }
 
