@@ -85,9 +85,8 @@ spark.sql("select file_name, header_key, substr(json_payload, 1, 20) from " + ta
 target_table = "hls_payer_transparency.in_network_rates_network_array"
 df = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest_round2 where header_key='in_network').rdd.repartition(20)
 
-spark \
-  .read \
-  .json(bigDF.rdd.map(lambda x: x[0].replace('\n', '\n'))) \
+spark.read \
+  .json(df.rdd.map(lambda x: x[0].replace('\n', '\n'))) \
   .write \
   .mode("overwrite") \
   .saveAsTable(target_table)
