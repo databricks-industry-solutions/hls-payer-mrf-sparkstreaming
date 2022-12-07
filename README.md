@@ -103,6 +103,15 @@ spark.table(target_table).printSchema()
 
 ```
 
+## Where to get MRF Files? 
+
+Here are some of the USA's larger payers and landing page
+1. UHG https://transparency-in-coverage.uhc.com/
+2. Anthem https://www.anthem.com/machine-readable-file/search/
+3. Cigna https://www.cigna.com/legal/compliance/machine-readable-files
+4. Aetna https://health1.aetna.com/app/public/#/one/insurerCode=AETNACVS_I&brandCode=ALICSI/machine-readable-transparency-in-coverage?reportingEntityType=Third%20Party%20Administrator_6644&lock=true
+5. Humana https://developers.humana.com/syntheticdata/Resource/PCTFilesList?fileType=innetwork
+
 ## Contributing to the package
 
 ### building
