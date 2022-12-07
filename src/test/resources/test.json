@@ -1,0 +1,32 @@
+{
+    "payer_name": "Aetna Life Insurance LLC",
+    "provider_references": [
+	{ "billing_code": "J1234",
+	  "negotiated_rates": [{
+	      "negotiated_prices": [{
+		  "dollar_amt": 10,
+		  "discounted_prcnt": 1
+	      }]
+	  }]
+	},
+	{ "billing_code": "98765",
+	  "negotiated_rates": [{
+	      "negotiated_prices": [{
+		  "dollar_amt": 20,
+		  "discounted_prcnt": 2
+	      }]
+	  }]
+	}
+    ],
+    "exp_date": "11-10-2022",
+    "in_network": [
+        { "nnnbilling_code": "J1234",
+          "nnnnegotiated_rates": [{
+              "nnnnegotiated_prices": [{
+                  "dollar_amt": 10,
+                  "discounted_prcnt": 1
+              }]
+          }]
+        }],
+    "recreating_company": "centenes"
+}
