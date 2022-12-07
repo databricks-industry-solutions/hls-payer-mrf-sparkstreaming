@@ -36,7 +36,7 @@ wget https://github.com/CMSgov/price-transparency-guide/blob/master/examples/in-
 
 ```python
 #parse the file using pyspark or scala spark
-dbfs_file_download_location=/dbfs/user/hive/warehouse/payer_transparency.db/raw_files/in-network-rates-bundle-single-plan-sample.json
+dbfs_file_download_location="/dbfs/user/hive/warehouse/payer_transparency.db/raw_files/in-network-rates-bundle-single-plan-sample.json"
 target_table="hls_payer_transparency.in_network_rates"
 
 df = spark.readStream \
