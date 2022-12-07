@@ -34,6 +34,7 @@ wget https://github.com/CMSgov/price-transparency-guide/blob/master/examples/in-
 #(recommended) unzip if extension is .gz
 #gunzip -cd $dbfs_file_download_location > /dbfs/user/hive...
 ```
+### Stream the downloaded sample to target delta table
 
 ```python
 #parse the file using pyspark or scala spark
@@ -65,7 +66,7 @@ query.stop()
 print("Query finished")
 ``` 
 
-## Sample Data Output
+## Sample Data Output from a larger payer
 
 ``` python
 df = spark.table(target_table)
