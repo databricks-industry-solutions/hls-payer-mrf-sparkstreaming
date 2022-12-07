@@ -112,6 +112,9 @@ Here are some of the USA's larger payers and landing page
 4. Aetna https://health1.aetna.com/app/public/#/one/insurerCode=AETNACVS_I&brandCode=ALICSI/machine-readable-transparency-in-coverage?reportingEntityType=Third%20Party%20Administrator_6644&lock=true
 5. Humana https://developers.humana.com/syntheticdata/Resource/PCTFilesList?fileType=innetwork
 
+## Meeting CMS 2023, 2024 Comparison Mandates
+Example notebook TODO for this design with Databricks Bronze, Silver, Gold arch Reference
+
 ## Contributing to the package
 
 ### building
