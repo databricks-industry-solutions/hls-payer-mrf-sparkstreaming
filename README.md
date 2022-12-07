@@ -24,20 +24,21 @@ spark.rpc.message.maxSize 1024
 
 ## Running
 
-``` bash
-#download file from Datatbricks notebook
 
+### Download a sample file in Databricks notebook to DBFS
+``` bash
 dbfs_file_download_location=/dbfs/user/hive/warehouse/payer_transparency.db/raw_files/in-network-rates-bundle-single-plan-sample.json
+
 wget https://github.com/CMSgov/price-transparency-guide/blob/master/examples/in-network-rates/in-network-rates-bundle-single-plan-sample.json -O $dbfs_file_download_location
 
-#unzip if extension is .gz
-#gunzip -cd $dbfs_file_download_location > ...
+#(recommended) unzip if extension is .gz
+#gunzip -cd $dbfs_file_download_location > /dbfs/user/hive...
 ```
 
 ```python
 #parse the file using pyspark or scala spark
-dbfs_file_download_location="/dbfs/user/hive/warehouse/payer_transparency.db/raw_files/in-network-rates-bundle-single-plan-sample.json"
-target_table="hls_payer_transparency.in_network_rates"
+dbfs_file_download_location="dbfs:/user/hive/warehouse/payer_transparency.db/raw_files/in-network-rates-bundle-single-plan-sample.json"
+target_table="hls_payer_transparency.in_network_rates_sample"
 
 df = spark.readStream \
     .format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider") \
@@ -53,10 +54,15 @@ df.writeStream
    )
    
 import time
-while(query.isActive()):
-    time.sleep(10) //sleep for 10 seconds
+lastBatch = -2 #Spark batches start at -1
+print("Sleeping for 30 seconds and then checking if query is still running...")
+time.sleep(30)
+while lastBatch != query.lastProgress.get('batchId'):
+  lastBatch =  query.lastProgress.get('batchId')
+  time.sleep(15) #sleep for 15 second intervals
 
-print("Query finished executing")
+query.stop()    
+print("Query finished")
 ``` 
 
 ## Sample Data Output
