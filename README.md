@@ -1,7 +1,4 @@
-# SparkStreamSources
-Spark Custom Stream Source for splitting large Payer MRF json formats
-
-
+# Custom Spark Streaming Source - Payer MRF
 
 ## Use Case 
 
@@ -12,6 +9,8 @@ CMS Schemas for MRF are built using a single json object which spark by default 
 
 
 ## Recommended Spark Settings
+
+Note attach jar package to your Spark 3.2.1, Scala 2.12 cluster from the "latest" release here
 
 ``` python
 spark.executor.cores 2
@@ -26,7 +25,7 @@ spark.rpc.message.maxSize 1024
 
 ## Running
 
-### Download a sample file in Databricks notebook to DBFS
+### Getting Sample Data
 ``` bash
 dbfs_file_download_location=/dbfs/user/hive/warehouse/payer_transparency.db/raw_files/in-network-rates-bundle-single-plan-sample.json
 
@@ -35,7 +34,7 @@ wget https://github.com/CMSgov/price-transparency-guide/blob/master/examples/in-
 #(recommended) unzip if extension is .gz
 #gunzip -cd $dbfs_file_download_location > /dbfs/user/hive...
 ```
-### Stream the downloaded sample to target delta table
+### Running the code
 
 ```python
 #parse the file using pyspark or scala spark
@@ -45,7 +44,11 @@ target_table="hls_payer_transparency.in_network_rates_sample"
 df = spark.readStream \
     .format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider") \
     .load(dbfs_file_download_location)
+```
 
+### Analyzing results
+
+```python 
 query = (
 df.writeStream 
     .outputMode("append") 
@@ -68,7 +71,7 @@ print("Query finished")
 ``` 
 
 
-## Sample Data Output from a larger payer
+## Sample Data and Schema from larger file
 
 ``` python
 df = spark.table(target_table)
