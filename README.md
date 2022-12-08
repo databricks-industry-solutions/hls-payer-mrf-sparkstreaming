@@ -91,10 +91,10 @@ spark.sql("select file_name, header_key, substr(json_payload, 1, 20) from " + ta
 |in-network-rates-...|                   |       {"reporting_entity":|
 
 #building out a sample silver table with schema inference
-df = spark.sql("select json_payload from " + target_table + " where header_key='in_network').rdd.repartition(20)
+rdd = spark.sql("select json_payload from " + target_table + " where header_key='in_network').rdd.repartition(20)
 
 spark.read \
-  .json(df.rdd.map(lambda x: x[0].replace('\n', '\n'))) \
+  .json(rdd.map(lambda x: x[0].replace('\n', '\n'))) \
   .write \
   .mode("overwrite") \
   .saveAsTable("hls_payer_transparency.in_network_rates_network_array")
