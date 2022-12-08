@@ -150,7 +150,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       while ( {bytesRead = inStream.read(buffer,0, BufferSize); bytesRead} != -1 ) {
 
         totalBytesRead += bytesRead
-        println("Total bytes read so far: " + totalBytesRead)
 
         //leftovers bytes unmatched (if any)
         parsingByteSize = bytesRead + bytesRemaining
@@ -177,7 +176,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       Thread.sleep(10000)
       inStream.close
       fileStream.close
-      println("Closing driver read stream, last offset delivered " + lastOffset.offset)
+      println("Finished reading MRF file\nclosing readStream() resource\nlast offset delivered to Spark -> " + lastOffset.offset)
     }
   }
   reader.start()
@@ -231,10 +230,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       case _ => LongOffset(-1) 
     }).offset
     val toKeep = batches.filter { case (_, idx) => idx > committed }
-
-    println(s"the deleted offset:" + committed)
-    println(s"after clean size ${toKeep.length}")
-    println(s"deleted: ${batches.size - toKeep.size}")
 
     batches = toKeep
   }

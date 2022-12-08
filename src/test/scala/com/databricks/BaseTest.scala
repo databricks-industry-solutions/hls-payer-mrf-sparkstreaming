@@ -6,12 +6,12 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import java.io.{InputStreamReader, BufferedInputStream}
 import java.util.zip.GZIPInputStream
 
-
 abstract class BaseTest extends AnyFunSuite{
 
   def spark: SparkSession = {
     val session = SparkSession.builder()
       .master("local[2]")
+      .config("spark.executor.instances", 1)
       .config("spark.driver.bindAddress","127.0.0.1") //Explicitly state this for Spark3.2.1
       .getOrCreate()
     session
