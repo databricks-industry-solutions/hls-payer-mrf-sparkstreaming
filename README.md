@@ -2,7 +2,9 @@
 Spark Custom Stream Source for splitting large Payer MRF json formats
 
 
+
 ## Use Case 
+
 
 CMS Schemas for MRF are built using a single json object which spark by default cannot split. Reading these large files often results in Out of Memory errors. This parser serves to transform any array objects under the header into multiple splittable lists that can be parsed. See sample schemas here ->  https://github.com/CMSgov/price-transparency-guide/tree/master/schemas
 
@@ -23,7 +25,6 @@ spark.rpc.message.maxSize 1024
 ```
 
 ## Running
-
 
 ### Download a sample file in Databricks notebook to DBFS
 ``` bash
@@ -65,6 +66,7 @@ while lastBatch != query.lastProgress.get('batchId'):
 query.stop()    
 print("Query finished")
 ``` 
+
 
 ## Sample Data Output from a larger payer
 
@@ -117,6 +119,7 @@ Here are some of the USA's larger payers and landing page
 3. Cigna https://www.cigna.com/legal/compliance/machine-readable-files
 4. Aetna https://health1.aetna.com/app/public/#/one/insurerCode=AETNACVS_I&brandCode=ALICSI/machine-readable-transparency-in-coverage?reportingEntityType=Third%20Party%20Administrator_6644&lock=true
 5. Humana https://developers.humana.com/syntheticdata/Resource/PCTFilesList?fileType=innetwork
+
 
 ## Meeting CMS 2023, 2024 Comparison Mandates
 Example notebook TODO for this design with Databricks Bronze, Silver, Gold arch Reference
