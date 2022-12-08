@@ -8,7 +8,7 @@ import java.io.{InputStreamReader, BufferedInputStream}
 import java.util.zip.GZIPInputStream
 
 
-class ByteParserTest extends StreamingTest with BeforeAndAfter{
+class ByteParserTest extends BaseTest with BeforeAndAfter{
 
   test("parseUntilArrayLeft()"){
     assert ( bytesRead == 711 )
