@@ -30,8 +30,11 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   var offset: LongOffset = LongOffset(-1)
   var lastOffset: LongOffset = LongOffset(-2)
   var batches = ListBuffer.empty[(JsonPartition, Long)] // (tuple of (tuple of file start offset, file end offset), spark offset)
-  val BufferSize: Int = options.get("buffersize").getOrElse(268435456).asInstanceOf[Int] //256MB is default but allowed to override
-
+  val BufferSize: Int = options.get("buffersize") match {
+    case Some(x) => Integer.parseInt(x)
+    case _ => 268435456 //256MB default 
+  }
+  println("Using read buffer size of " + BufferSize)
   val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
   val fs =  options.get("filesystem") match {
     case Some("s3a") =>
@@ -81,20 +84,20 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
           endOfArray match { 
             case (ByteParser.EOB, ByteParser.EOB) =>  //what if there is no valid array split OR end of Array in our Byte String?
               return (Some(buffer), headerKey)
-            case (-1, _) =>
-              throw new Exception("Error: Unable to find a split within buffer. FileOffset: " + fileOffset + "\tstartIndex:" + startIndex ) //Expect at minimum to find a split in buffersize
+            case (-1, _) => //unable to even find a split point in the buffer
+              (Some(buffer), headerKey)
             case (x, ByteParser.EOB) => //Array has not ended, but x is a valid offset to save
               val i = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, x+1, bytesRead)
               this.synchronized {
                 offset = offset + 1
-                batches.append(( new JsonPartition(startIndex + fileOffset, i+fileOffset, headerKey.get), offset.offset ) )
+                batches.append(( new JsonPartition(startIndex + fileOffset, x + fileOffset, headerKey.get), offset.offset ) )
               }
               //make sure the next start point is either a { or [
               return (Some(buffer.slice(i, bytesRead)),headerKey ) //return leftovers
             case (x,y) => //full recrd found within a byteArray. Y = outer array end, x = last element inside array end
               this.synchronized {
                 offset = offset + 1
-                batches.append(( new JsonPartition(startIndex + fileOffset, y + fileOffset, headerKey.get), offset.offset ))
+                batches.append(( new JsonPartition(startIndex + fileOffset, y - 1 + fileOffset, headerKey.get), offset.offset ))
               }
               return parse(bytesRead, buffer, (y+1), None, fileOffset)
           }
@@ -150,7 +153,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       while ( {bytesRead = inStream.read(buffer,0, BufferSize); bytesRead} != -1 ) {
 
         totalBytesRead += bytesRead
-
+        println("Total bytes read so far: " + totalBytesRead)
         //leftovers bytes unmatched (if any)
         parsingByteSize = bytesRead + bytesRemaining
         if ( bytesRemaining > 0 ) {
@@ -197,7 +200,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       case _ => LongOffset(-1)
     }).offset+1
 
-    //println(s"generating spark batch range $start ; $end")
+    println(s"generating spark batch range $start ; $end")
 
     /*
      * Capture valid byte offsets to be committed
@@ -230,6 +233,10 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       case _ => LongOffset(-1) 
     }).offset
     val toKeep = batches.filter { case (_, idx) => idx > committed }
+
+    println(s"the deleted offset:" + committed)
+    println(s"after clean size ${toKeep.length}")
+    println(s"deleted: ${batches.size - toKeep.size}")
 
     batches = toKeep
   }

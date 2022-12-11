@@ -5,6 +5,7 @@ import org.scalatest._
 import org.apache.spark.sql.SparkSession
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.functions._
+import play.api.libs.json.Json
 
 class SparkStreamingSource extends BaseTest with BeforeAndAfter{
 
@@ -31,6 +32,31 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
     assert(resultDF.filter(resultDF("header_key") === "provider_references").count >= 1)
     assert(resultDF.filter(resultDF("header_key") === "in_network").count >= 1)
     assert(resultDF.filter(resultDF("header_key") === "").count >= 1)
+  }
+
+  test("Results are all valid JSON objects"){
+    val df = ( spark.readStream
+      .format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider")
+      .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample.json")
+    )
+
+    val query = (
+      df.writeStream
+        .outputMode("append")
+        .format("parquet")
+        .queryName("The JSON splitter")
+        .option("checkpointLocation", "src/test/resources/temp_ffs_sample_json_chkpoint_dir")
+        .start("src/test/resources/temp_ffs_sample_json")
+    )
+    Thread.sleep(5 * 1000)
+    assert(query.isActive)
+    query.processAllAvailable
+    query.stop
+    assert(!query.isActive)
+
+    val resultDF = spark.read.format("parquet").load("src/test/resources/temp_ffs_sample_json")
+    val jsonCollection = resultDF.select(resultDF("json_payload")).collect
+    jsonCollection.map(x => Json.parse(x.getString(0)))
   }
 
   test("Spark Streaming Results Format Tests"){
@@ -62,11 +88,15 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
     assert(jsonDF.schema.filter(x => x.name == "negotiated_rates").size >= 1)
   }
 
+
+
   after{
     fs.delete(new Path("src/test/resources/temp_ffs_sample_rdd_chkpoint_dir"), true)
     fs.delete(new Path("src/test/resources/temp_ffs_sample_chkpoint_dir"), true)
+    fs.delete(new Path("src/test/resources/temp_ffs_sample_json_chkpoint_dir"), true)
     fs.delete(new Path("src/test/resources/temp_ffs_sample"), true)
     fs.delete(new Path("src/test/resources/temp_ffs_sample_rdd"), true)
+    fs.delete(new Path("src/test/resources/temp_ffs_sample_json"), true)
     fs.close
     spark.stop
   }

@@ -51,6 +51,11 @@ private class JsonMRFRDD(
       if( buffer(ByteParser.skipWhiteSpaceRight(buffer, (part.end - part.start).toInt, (part.end - part.start + 1).toInt)) != ByteParser.CloseB)
         buffer = buffer  :+ '}'.toByte
     }
+    else{
+      //this is an array, make sure it starts and ends with brackets
+      buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
+
+    }
     Seq(InternalRow(UTF8String.fromString(fileName.getName), UTF8String.fromString(part.headerKey), UTF8String.fromBytes(buffer))).toIterator
   }
 }
