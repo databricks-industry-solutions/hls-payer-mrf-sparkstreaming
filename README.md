@@ -86,11 +86,11 @@ spark.sql("select file_name, header_key, substr(json_payload, 1, 20) from " + ta
 +--------------------+-------------------+---------------------------+
 |           file_name|         header_key|substr(json_payload, 1, 20)|
 +--------------------+-------------------+---------------------------+
-|in-network-rates-...|provider_references|       {"provider_groups": |
-|in-network-rates-...|         in_network|       {"negotiation_arrang|
-|in-network-rates-...|         in_network|       {"negotiation_arrang|
-|in-network-rates-...|         in_network|       {"negotiation_arrang|
-|in-network-rates-...|         in_network|       {"negotiation_arrang|
+|in-network-rates-...|provider_references|      [{"provider_groups": |
+|in-network-rates-...|         in_network|      [{"negotiation_arrang|
+|in-network-rates-...|         in_network|      [{"negotiation_arrang|
+|in-network-rates-...|         in_network|      [{"negotiation_arrang|
+|in-network-rates-...|         in_network|      [{"negotiation_arrang|
 |in-network-rates-...|                   |       {"reporting_entity":|
 
 #building out a sample silver table with schema inference
