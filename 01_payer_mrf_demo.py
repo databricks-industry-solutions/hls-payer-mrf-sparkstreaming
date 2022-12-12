@@ -24,6 +24,11 @@
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC create database if not exists hls_dev_payer_transparency;
+
+# COMMAND ----------
+
 #(3) Stream to target ingest table
 source_data = "dbfs:/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json"
 
