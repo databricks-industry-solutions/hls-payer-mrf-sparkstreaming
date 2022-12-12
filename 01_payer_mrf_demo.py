@@ -1,83 +1,184 @@
 # Databricks notebook source
 # MAGIC %md 
-# MAGIC You may find this series of notebooks at https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming. 
-
-# COMMAND ----------
-
-# MAGIC %md 
-# MAGIC # SparkStreamSources
-# MAGIC Spark Custom Stream Source and Sink for Payer MRF Use Case
-# MAGIC 
-# MAGIC ## Recommended Spark Settings
-# MAGIC 
-# MAGIC ``` python
-# MAGIC #Spark Settings
-# MAGIC spark.rpc.message.maxSize 1024
-# MAGIC spark.driver.memory 12g
-# MAGIC spark.driver.cores 2
-# MAGIC 
-# MAGIC #JVM Settings (8g or higher)
-# MAGIC JAVA_OPTS=-Xmx8g -Xms8g
-# MAGIC 
-# MAGIC ```
-# MAGIC 
-# MAGIC ## Running
-# MAGIC 
-# MAGIC ``` python
-# MAGIC df = spark.readStream
-# MAGIC     .format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider")
-# MAGIC     .load("/Users/aaron.zavora//Downloads/umr-tpa-encore-in-network-rates.json")
-# MAGIC 
-# MAGIC df.writeStream
-# MAGIC     .outputMode("append")
-# MAGIC     .format("text")
-# MAGIC     .queryName("umr-tpa-in-network-parsing")
-# MAGIC     .option("checkpointLocation", "src/test/resources/chkpoint_dir")
-# MAGIC     .start("src/test/resources/output")
-# MAGIC ``` 
-# MAGIC 
-# MAGIC ## Use Case 
-# MAGIC 
-# MAGIC Schema definition that is parsed is the CMS in-network file. https://github.com/CMSgov/price-transparency-guide/tree/master/schemas/in-network-rates
-# MAGIC 
-# MAGIC ## Unzipping First Recommended
-# MAGIC 
-# MAGIC 
-# MAGIC ```python
-# MAGIC #3.6G zipped, 120G unzipped file 
-# MAGIC #download to local storage "Command took 17.75 minutes"
-# MAGIC wget -O ./2022-08-01_umr_inc_tpa_encore_non_evaluated_gap_enc-in-network-rates.json.gz https://uhc-tic-mrf.azureedge.net/public-mrf/2022-08-01/2022-08-01_UMR--Inc-_TPA_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz
-# MAGIC 
-# MAGIC #unzip to DBFS  "Command took 26.83 minutes"
-# MAGIC gunzip -cd ./2022-08-01_umr_inc_tpa_encore_non_evaluated_gap_enc-in-network-rates.json.gz > /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-08-01_umr_inc_tpa_encore_non_evaluated_gap_enc-in-network-rates.json 
-# MAGIC ```
-# MAGIC 
-# MAGIC 
-# MAGIC ## Data Output
-# MAGIC 
-# MAGIC ``` bash
-# MAGIC more  src/test/resources/output/part-00000-a6af8cf3-6162-4d60-9acb-8933bac19b8b-c000.txt
-# MAGIC >[{"negotiation_arrangement":"ffs","name":"BRONCHOSCOPY W/TRANSBRONCHIAL LUNG BX EACH LOBE","billi
-# MAGIC ...
-# MAGIC >[{"negotiation_arrangement":"ffs","name":"ANESTHESIA EXTENSIVE SPINE & SPINAL CORD","bil
-# MAGIC 
-# MAGIC ```
-# MAGIC 
-# MAGIC ## Speed 
-# MAGIC 
-# MAGIC On a Spark driver with xmx8g performs at ~2.5GB per minute. Note of caution, this program depends on buffering. Some forms of .gz extension do not enable efficient buffering in the JVM. It is recommended to unzip first (as mentioned above)
-# MAGIC 
-# MAGIC This project serves as an example to implement Apache Spark custom Structured Streaming Sources. 
-# MAGIC 
-# MAGIC This project is accompanied by [Spark Custom Stream Sources](https://hackernoon.com/spark-custom-stream-sources-ec360b8ae240)
+# MAGIC ## Example Workflow 
+# MAGIC  Bronze (1) Download, (2) Unzip, (3) Stream  
+# MAGIC  Silver (1) Curation ETL into desired Data Model  
+# MAGIC  Gold (1) Serve Payer Transparency Comparison Tool (2023,2024) CMS Requirements
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Next steps
-# MAGIC * Add publicly available source data; make publishable
-# MAGIC * (?) Bronze-silver-gold layer; optionally analysis 
+# MAGIC ### Bronze 
 
 # COMMAND ----------
 
+# MAGIC %sh
+# MAGIC #(1) Download to DBFS storage
+# MAGIC wget -O /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz  https://uhc-tic-mrf.azureedge.net/public-mrf/2022-12-01/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz
 
+# COMMAND ----------
+
+# MAGIC %sh 
+# MAGIC #(2) unzip in dbfs 
+# MAGIC gunzip -cd /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz  > /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json
+
+# COMMAND ----------
+
+#(3) Stream to target ingest table
+source_data = "dbfs:/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json"
+
+df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load(source_data)
+spark.sql("DROP TABLE IF EXISTS hls_dev_payer_transparency.payer_transparency_ingest")
+spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_ingest_in_network""")
+dbutils.fs.rm(source_data + "_checkpoint", True)
+
+
+query = (
+df.writeStream \
+ .outputMode("append") \
+ .format("delta") \
+ .option("truncate", "false") \
+ .option("checkpointLocation", source_data + "_checkpoint") \
+ .table("hls_dev_payer_transparency.payer_transparency_ingest") 
+)
+
+import time
+lastBatch = -2 #Spark batches start at -1
+print("Sleeping for 60 seconds and then checking if query is still running...")
+time.sleep(60)
+while lastBatch != query.lastProgress.get('batchId'):
+  lastBatch =  query.lastProgress.get('batchId')
+  time.sleep(60) #sleep for 60 second intervals
+
+query.stop()    
+print("Query finished")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Create tables from JSON structures for ETL development in SQL
+
+# COMMAND ----------
+
+import json
+
+in_network_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key='in_network'").rdd.repartition(100).map( lambda x: json.loads(x.__getitem__('json_payload')) )
+
+provider_references_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key='provider_references'").rdd.repartition(25).map( lambda x: json.loads(x.__getitem__('json_payload')) )
+
+header_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key=''").rdd.repartition(1).map( lambda x: json.loads(x.__getitem__('json_payload')) )
+
+
+# COMMAND ----------
+
+spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_provider_header""")
+spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_provider_references""")
+spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_in_network""")
+
+spark.read.json(header_rdd).write.mode("overwrite").saveAsTable("hls_dev_payer_transparency.payer_transparency_in_network_provider_header")
+spark.read.json(provider_references_rdd).write.mode("overwrite").saveAsTable("hls_dev_payer_transparency.payer_transparency_in_network_provider_references")
+spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_payer_transparency.payer_transparency_in_network_in_network")
+
+# COMMAND ----------
+
+# MAGIC %md ### Silver 
+# MAGIC ETL Curation to report off of 2023 mandate. Compare prices for a procedure (BILLING_CODE) within a provider group (TIN)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC --Provider References X Payer
+# MAGIC drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer;
+# MAGIC create table hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer
+# MAGIC as
+# MAGIC select   reporting_entity_name, reporting_entity_type, foo.provider_group_id, foo.group_array.npi, foo.group_array.tin
+# MAGIC from 
+# MAGIC (
+# MAGIC select provider_group_id, explode(provider_groups) as group_array
+# MAGIC from hls_dev_payer_transparency.payer_transparency_in_network_provider_references 
+# MAGIC ) foo
+# MAGIC inner join (select  reporting_entity_name, reporting_entity_type from  hls_dev_payer_transparency.payer_transparency_in_network_provider_header where reporting_entity_name is not null) entity
+# MAGIC on 1=1 
+# MAGIC ;
+# MAGIC 
+# MAGIC --Procedure Table
+# MAGIC drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes;
+# MAGIC create table hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes
+# MAGIC as
+# MAGIC select  uuid() as sk_in_network_id
+# MAGIC ,n.billing_code
+# MAGIC ,n.billing_code_type
+# MAGIC ,n.billing_code_type_version
+# MAGIC ,n.description
+# MAGIC ,n.name
+# MAGIC ,n.negotiation_arrangement
+# MAGIC ,n.negotiated_rates
+# MAGIC from hls_dev_payer_transparency.payer_transparency_in_network_in_network n
+# MAGIC ;
+# MAGIC 
+# MAGIC -- M:M relationship between rates and network
+# MAGIC drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates;
+# MAGIC create table hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates
+# MAGIC as
+# MAGIC select  uuid() as sk_rate_id
+# MAGIC ,foo.sk_in_network_id
+# MAGIC ,foo.negotiated_rates_array
+# MAGIC from
+# MAGIC (
+# MAGIC select sk_in_network_id, explode(c.negotiated_rates) as negotiated_rates_array
+# MAGIC from hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes c
+# MAGIC ) foo
+# MAGIC ;
+# MAGIC 
+# MAGIC --Procedure Price details
+# MAGIC drop table if exists  hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_prices;
+# MAGIC create table  hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_prices
+# MAGIC as 
+# MAGIC select sk_in_network_id, sk_rate_id, price.billing_class, price.billing_code_modifier, price.expiration_date, price.negotiated_rate, price.negotiated_type, price.service_code
+# MAGIC from
+# MAGIC (
+# MAGIC select explode (negotiated_rates_array.negotiated_prices) as price, sk_rate_id, sk_in_network_id
+# MAGIC from hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates
+# MAGIC ) foo
+# MAGIC where price.negotiated_type = 'negotiated'
+# MAGIC ; 
+# MAGIC 
+# MAGIC --Providers par in a price and procedure
+# MAGIC drop table if exists  hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_par_providers;
+# MAGIC create table  hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_par_providers
+# MAGIC as
+# MAGIC select provider_reference_id, sk_rate_id
+# MAGIC from
+# MAGIC (
+# MAGIC select explode (negotiated_rates_array.provider_references) as provider_reference_id, sk_rate_id
+# MAGIC from hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates
+# MAGIC ) foo
+# MAGIC ;
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Gold
+# MAGIC 2023 Shoppable prices
+
+# COMMAND ----------
+
+code = '43283'
+tin = 161294447
+spark.sql(f"""
+SELECT billing_code, description, billing_class, billing_code_modifier, service_code, negotiated_rate, npi, tin
+FROM 
+(
+select *
+from hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes 
+where billing_code = {code} --picking  a random code
+	and negotiation_arrangement = 'ffs'
+) proc
+inner join hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_prices price
+	on proc.sk_in_network_id = price.sk_in_network_id
+inner join (hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_par_providers) provider_ref
+	on price.sk_rate_id = provider_ref.sk_rate_id
+inner join (hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer) provider
+	on provider_ref.provider_reference_id = provider.provider_group_id
+		and tin.value= {tin}--pick a random provider practice
+""").show()
