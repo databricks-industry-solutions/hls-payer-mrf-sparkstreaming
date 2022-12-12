@@ -1,6 +1,6 @@
 name := "payer-mrf-streamsource"
 
-version := "0.3"
+version := "0.3.0"
 
 lazy val scala212 = "2.12.8"
 lazy val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "3.2.1")
@@ -15,7 +15,10 @@ lazy val sparkDependencies = Seq(
   "org.apache.hadoop" % "hadoop-hdfs" % "3.3.0"
 ).map(_ % " provided")
 
-lazy val testDependencies = Seq("org.scalatest" %% "scalatest" % "3.2.14" % Test)
+lazy val testDependencies = Seq(
+  "org.scalatest" %% "scalatest" % "3.2.14",
+  "com.typesafe.play" %% "play-json" % "2.9.0"
+).map(_ % Test)
 
 val coreDependencies = Seq(
   "com.google.guava" % "guava" % "12.0",
