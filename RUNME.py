@@ -79,7 +79,7 @@ job_json = {
             {
                 "job_cluster_key": "payer_mrf_cluster",
                 "new_cluster": {
-                    "spark_version": "11.3.x-scala2.12",
+                    "spark_version": "10.4.x-scala2.12",
                 "spark_conf": {
                     "spark.rpc.message.maxSize": "1024",
                     "spark.driver.memory": "12g",
