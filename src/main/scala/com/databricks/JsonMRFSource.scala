@@ -47,7 +47,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   val fileName = new Path(options.get("path").get)
   val fileStream = fs.open(fileName)
   val inStream = options.get("path").get match {
-    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), 8192) //Gzip compression testing
+    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), BufferSize) //Gzip compression testing
     case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, BufferSize) //256MB buffer
     case _ => throw new Exception("codec for file extension not implemented yet")
   }
