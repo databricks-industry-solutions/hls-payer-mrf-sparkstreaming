@@ -31,7 +31,7 @@
 
 # MAGIC %sql
 # MAGIC create database if not exists hls_dev_payer_transparency;
-# MAGIC set spark.sql.files.maxPartitionBytes=8388608 -- 8MB; set partition sizes small on read to avoid repartitioning later
+# MAGIC set spark.sql.files.maxPartitionBytes=8388608
 # MAGIC set spark.databricks.delta.optimizeWrite.enabled=true
 # MAGIC set spark.databricks.delta.autoCompact.enabled=true
 
