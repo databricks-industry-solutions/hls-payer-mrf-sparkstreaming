@@ -28,6 +28,13 @@
 
 # COMMAND ----------
 
+# MAGIC %sh
+# MAGIC #Download to DBFS storage
+# MAGIC mkdir -p /dbfs/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/
+# MAGIC wget https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/releases/download/03.0v/payer-mrf-streamsource-0.3.0.jar -O /dbfs/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.0.jar
+
+# COMMAND ----------
+
 from solacc.companion import NotebookSolutionCompanion
 
 # COMMAND ----------
@@ -44,8 +51,26 @@ job_json = {
                 "job_cluster_key": "payer_mrf_cluster",
                 "libraries": [],
                 "notebook_task": {
+                    "notebook_path": f"00_README"
+                },
+                "task_key": "payer_mrf_00",
+                "description": ""
+            },
+            {
+                "job_cluster_key": "payer_mrf_cluster",
+                "notebook_task": {
                     "notebook_path": f"01_payer_mrf_demo"
                 },
+                "libraries": [
+                    {
+                        "jar": "dbfs:///databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.0.jar"
+                    }
+                ],
+                "depends_on": [
+                    {
+                        "task_key": "payer_mrf_00"
+                    }
+                ],
                 "task_key": "payer_mrf_01",
                 "description": ""
             }
@@ -54,7 +79,7 @@ job_json = {
             {
                 "job_cluster_key": "payer_mrf_cluster",
                 "new_cluster": {
-                    "spark_version": "11.3.x-scala2.12",
+                    "spark_version": "10.4.x-scala2.12",
                 "spark_conf": {
                     "spark.rpc.message.maxSize": "1024",
                     "spark.driver.memory": "12g",

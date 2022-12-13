@@ -24,23 +24,30 @@
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC create database if not exists hls_dev_payer_transparency;
+
+# COMMAND ----------
+
 #(3) Stream to target ingest table
 source_data = "dbfs:/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json"
 
-df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load(source_data)
+
 spark.sql("DROP TABLE IF EXISTS hls_dev_payer_transparency.payer_transparency_ingest")
 spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_ingest_in_network""")
 dbutils.fs.rm(source_data + "_checkpoint", True)
 
-
+df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load(source_data)
 query = (
-df.writeStream \
- .outputMode("append") \
- .format("delta") \
- .option("truncate", "false") \
- .option("checkpointLocation", source_data + "_checkpoint") \
+df.writeStream 
+ .outputMode("append") 
+ .format("delta") 
+ .option("truncate", "false") 
+ .option("checkpointLocation", source_data + "_checkpoint") 
  .table("hls_dev_payer_transparency.payer_transparency_ingest") 
 )
+
+# COMMAND ----------
 
 import time
 lastBatch = -2 #Spark batches start at -1
