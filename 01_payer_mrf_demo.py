@@ -31,9 +31,9 @@
 
 # MAGIC %sql
 # MAGIC create database if not exists hls_dev_payer_transparency;
-# MAGIC set spark.sql.files.maxPartitionBytes=8388608
-# MAGIC set spark.databricks.delta.optimizeWrite.enabled=true
-# MAGIC set spark.databricks.delta.autoCompact.enabled=true
+# MAGIC set spark.sql.files.maxPartitionBytes=8388608b;
+# MAGIC set spark.databricks.delta.optimizeWrite.enabled=true;
+# MAGIC set spark.databricks.delta.autoCompact.enabled=true;
 
 # COMMAND ----------
 
