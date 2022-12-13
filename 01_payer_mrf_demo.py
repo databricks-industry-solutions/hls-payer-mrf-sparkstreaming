@@ -19,10 +19,6 @@
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
 # MAGIC %sh 
 # MAGIC #(2) unzip in dbfs 
 # MAGIC gunzip -cd /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz  > /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json
@@ -171,16 +167,16 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 
 # MAGIC %md
 # MAGIC ### Gold
-# MAGIC 2023 Shoppable prices
-
-# COMMAND ----------
-
-dbutils.widgets.text("billing_code", "43283") # providing a default value that can be updated interactively
-dbutils.widgets.text("tin_value", "161294447") # providing a default value that can be updated interactively
+# MAGIC 2023 Shoppable prices using some random examples of billing code and provider practice
 
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC 
+# MAGIC CREATE WIDGET TEXT billing_code DEFAULT "43283"; 
+# MAGIC 
+# MAGIC CREATE WIDGET TEXT tin_value DEFAULT "161294447";
+# MAGIC 
 # MAGIC SELECT billing_code, description, billing_class, billing_code_modifier, service_code, negotiated_rate, npi, tin
 # MAGIC FROM hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes proc
 # MAGIC inner join hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_prices price
@@ -189,8 +185,8 @@ dbutils.widgets.text("tin_value", "161294447") # providing a default value that 
 # MAGIC 	on price.sk_rate_id = provider_ref.sk_rate_id
 # MAGIC inner join (hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer) provider
 # MAGIC 	on provider_ref.provider_reference_id = provider.provider_group_id
-# MAGIC where billing_code = ${billing_code} -- picking  a random code
-# MAGIC 	and negotiation_arrangement = 'ffs' and tin.value= ${tin_value} -- pick a random provider practice
+# MAGIC where billing_code = getArgument('billing_code')
+# MAGIC 	and negotiation_arrangement = 'ffs' and tin.value= getArgument('tin_value') 
 
 # COMMAND ----------
 
