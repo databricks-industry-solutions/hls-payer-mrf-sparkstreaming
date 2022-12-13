@@ -86,7 +86,7 @@ job_json = {
                     "spark.driver.cores": "2",
                     "spark.driver.extraJavaOptions": "-Xmx8g -Xms8g" #?????? is this on driver or executor? on executor use spark.executor.extraJavaOptions
                     },
-                    "num_workers": 1,
+                    "num_workers": 8,
                     "node_type_id": {"AWS": "i3.xlarge", "MSA": "Standard_L4s", "GCP": "n1-highmem-4"},
                     "custom_tags": {
                         "usage": "solacc_testing"

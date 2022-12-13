@@ -61,11 +61,12 @@ df.writeStream
 
 import time
 lastBatch = -2 #Spark batches start at -1
-print("Sleeping for 60 seconds and then checking if query is still running...")
-time.sleep(60)
+print("Sleeping for 300 seconds and then checking if query is still running... Each microbatch should take less than 300 seconds here")
+time.sleep(300)
 while lastBatch != query.lastProgress.get('batchId'):
   lastBatch =  query.lastProgress.get('batchId')
-  time.sleep(60) #sleep for 60 second intervals
+  print("Query still running - wait another 300 seconds")
+  time.sleep(300) #sleep for another interval
 
 query.stop()    
 print("Query finished")
@@ -91,6 +92,11 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 
 # MAGIC %md ### Silver 
 # MAGIC ETL Curation to report off of 2023 mandate. Compare prices for a procedure (BILLING_CODE) within a provider group (TIN)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC set spark.sql.files.maxPartitionBytes=128m;
 
 # COMMAND ----------
 
