@@ -54,7 +54,6 @@ private class JsonMRFRDD(
     else{
       //this is an array, make sure it starts and ends with brackets
       buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
-
     }
     Seq(InternalRow(UTF8String.fromString(fileName.getName), UTF8String.fromString(part.headerKey), UTF8String.fromBytes(buffer))).toIterator
   }
