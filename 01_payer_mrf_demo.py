@@ -61,8 +61,8 @@ df.writeStream
 
 import time
 lastBatch = -2 #Spark batches start at -1
-print("Sleeping for 300 seconds and then checking if query is still running... Each microbatch should take less than 300 seconds here")
-time.sleep(300)
+print("Sleeping for 50 minutes  and then checking if query is still running... Each microbatch should take less than 50 minutes here")
+time.sleep(3000)
 while lastBatch != query.lastProgress.get('batchId'):
   lastBatch =  query.lastProgress.get('batchId')
   print("Query still running - wait another 300 seconds")
