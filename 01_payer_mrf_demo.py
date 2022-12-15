@@ -51,7 +51,8 @@ df = spark.readStream.option("buffersize", 67108864).format("com.databricks.labs
 query = (
 df.writeStream 
  .outputMode("append") 
- .format("delta") 
+ .format("delta")
+ .trigger(processingTime="10 seconds")
  .option("truncate", "false") 
  .option("checkpointLocation", source_data + "_checkpoint") 
  .table("hls_dev_payer_transparency.payer_transparency_ingest") 
