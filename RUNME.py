@@ -82,10 +82,10 @@ job_json = {
                     "spark_version": "10.4.x-scala2.12",
                 "spark_conf": {
                     "spark.rpc.message.maxSize": "1024",
-                    "spark.driver.cores": "3", # 1 reader, 1 offset writer, 1 for spark tasks
+                    "spark.driver.cores": "6", # 1 reader, 1 offset writer, 1 for spark tasks
                     },
                     "num_workers": 4,
-                    "node_type_id": {"AWS": "i3.xlarge", "MSA": "Standard_L4s", "GCP": "n1-highmem-4"},
+                    "node_type_id": {"AWS": "c4.2xlarge", "MSA": "Standard_L4s", "GCP": "n1-highmem-4"},
                     "custom_tags": {
                         "usage": "solacc_testing"
                     },
