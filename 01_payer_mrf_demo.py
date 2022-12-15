@@ -27,9 +27,6 @@
 
 # MAGIC %sql
 # MAGIC create database if not exists hls_dev_payer_transparency;
-# MAGIC set spark.sql.files.maxPartitionBytes=8388608b;
-# MAGIC set spark.databricks.delta.optimizeWrite.enabled=true;
-# MAGIC set spark.databricks.delta.autoCompact.enabled=true;
 
 # COMMAND ----------
 
@@ -62,12 +59,12 @@ df.writeStream
 
 import time
 lastBatch = -2 #Spark batches start at -1
-print("Sleeping for 50 minutes  and then checking if query is still running... Each microbatch should take less than 50 minutes here")
-time.sleep(3000)
+print("sleep for 30 seconds, then check query")
+time.sleep(30)
 while lastBatch != query.lastProgress.get('batchId'):
   lastBatch =  query.lastProgress.get('batchId')
-  print("Query still running - wait another 300 seconds")
-  time.sleep(300) #sleep for another interval
+  print("Query still running - wait another 30 seconds")
+  time.sleep(30) #sleep for another interval
 
 query.stop()    
 print("Query finished")
