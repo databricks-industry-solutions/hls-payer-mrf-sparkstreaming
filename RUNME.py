@@ -82,7 +82,6 @@ job_json = {
                     "spark_version": "10.4.x-scala2.12",
                 "spark_conf": {
                     "spark.rpc.message.maxSize": "1024",
-                    "spark.driver.memory": "12g",
                     "spark.driver.cores": "3", # 1 reader, 1 offset writer, 1 for spark tasks
                     },
                     "num_workers": 4,
