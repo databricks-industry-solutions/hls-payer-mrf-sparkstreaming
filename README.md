@@ -120,7 +120,7 @@ Here are some of the USA's larger payers and landing page
 
 
 ## Meeting CMS 2023, 2024 Comparison Mandates
-Check out the demo notebook ***01_payer_mrf_demo.py*** to ingest, split, and create a simple data model for meeting CMS mandates from an in-network file
+Check out the demo notebook ***01_payer_mrf_demo.py*** to ingest, split, create a simple data model, and a lightweight query for complying with the CMS mandates for comparable prices.
 
 ## Contributing to the package
 
