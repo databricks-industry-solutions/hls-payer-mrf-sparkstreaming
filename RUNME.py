@@ -83,10 +83,9 @@ job_json = {
                 "spark_conf": {
                     "spark.rpc.message.maxSize": "1024",
                     "spark.driver.memory": "12g",
-                    "spark.driver.cores": "2",
-                    "spark.driver.extraJavaOptions": "-Xmx8g -Xms8g" #?????? is this on driver or executor? on executor use spark.executor.extraJavaOptions
+                    "spark.driver.cores": "3", # 1 reader, 1 offset writer, 1 for spark tasks
                     },
-                    "num_workers": 8,
+                    "num_workers": 4,
                     "node_type_id": {"AWS": "i3.xlarge", "MSA": "Standard_L4s", "GCP": "n1-highmem-4"},
                     "custom_tags": {
                         "usage": "solacc_testing"
