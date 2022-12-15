@@ -14,6 +14,7 @@
 
 # MAGIC %sh
 # MAGIC #(1) Download to DBFS storage
+# MAGIC mkdir -p /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/
 # MAGIC wget -O /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz  https://uhc-tic-mrf.azureedge.net/public-mrf/2022-12-01/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz
 
 # COMMAND ----------
@@ -29,19 +30,26 @@
 
 # COMMAND ----------
 
-#(3) Stream to target ingest table
 source_data = "dbfs:/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json"
 
+# COMMAND ----------
 
+# reinitialize tables to be created in this notebook
 spark.sql("DROP TABLE IF EXISTS hls_dev_payer_transparency.payer_transparency_ingest")
 spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_ingest_in_network""")
 dbutils.fs.rm(source_data + "_checkpoint", True)
+spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_provider_header""")
+spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_provider_references""")
+spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_in_network""")
 
-df = spark.readStream.format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load(source_data)
+# COMMAND ----------
+
+df = spark.readStream.option("buffersize", 67108864).format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load(source_data)
 query = (
 df.writeStream 
  .outputMode("append") 
- .format("delta") 
+ .format("delta")
+ .trigger(processingTime="10 seconds")
  .option("truncate", "false") 
  .option("checkpointLocation", source_data + "_checkpoint") 
  .table("hls_dev_payer_transparency.payer_transparency_ingest") 
@@ -51,11 +59,12 @@ df.writeStream
 
 import time
 lastBatch = -2 #Spark batches start at -1
-print("Sleeping for 60 seconds and then checking if query is still running...")
-time.sleep(60)
+print("sleep for 30 seconds, then check query")
+time.sleep(30)
 while lastBatch != query.lastProgress.get('batchId'):
   lastBatch =  query.lastProgress.get('batchId')
-  time.sleep(60) #sleep for 60 second intervals
+  print("Query still running - wait another 30 seconds")
+  time.sleep(30) #sleep for another interval
 
 query.stop()    
 print("Query finished")
@@ -67,20 +76,11 @@ print("Query finished")
 
 # COMMAND ----------
 
-import json
-
-in_network_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key='in_network'").rdd.repartition(100).map( lambda x: json.loads(x.__getitem__('json_payload')) )
-
-provider_references_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key='provider_references'").rdd.repartition(25).map( lambda x: json.loads(x.__getitem__('json_payload')) )
-
-header_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key=''").rdd.repartition(1).map( lambda x: json.loads(x.__getitem__('json_payload')) )
-
+provider_references_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key='provider_references'").rdd.flatMap(lambda x:x)
+header_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key=''").rdd.flatMap(lambda x:x)
+in_network_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key='in_network'").rdd.flatMap(lambda x:x)
 
 # COMMAND ----------
-
-spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_provider_header""")
-spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_provider_references""")
-spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_in_network""")
 
 spark.read.json(header_rdd).write.mode("overwrite").saveAsTable("hls_dev_payer_transparency.payer_transparency_in_network_provider_header")
 spark.read.json(provider_references_rdd).write.mode("overwrite").saveAsTable("hls_dev_payer_transparency.payer_transparency_in_network_provider_references")
@@ -90,6 +90,11 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 
 # MAGIC %md ### Silver 
 # MAGIC ETL Curation to report off of 2023 mandate. Compare prices for a procedure (BILLING_CODE) within a provider group (TIN)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC set spark.sql.files.maxPartitionBytes=128m;
 
 # COMMAND ----------
 
@@ -166,26 +171,27 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 
 # MAGIC %md
 # MAGIC ### Gold
-# MAGIC 2023 Shoppable prices
+# MAGIC 2023 Shoppable prices using some random examples of billing code and provider practice
 
 # COMMAND ----------
 
-code = '43283'
-tin = 161294447
-spark.sql(f"""
-SELECT billing_code, description, billing_class, billing_code_modifier, service_code, negotiated_rate, npi, tin
-FROM 
-(
-select *
-from hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes 
-where billing_code = {code} --picking  a random code
-	and negotiation_arrangement = 'ffs'
-) proc
-inner join hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_prices price
-	on proc.sk_in_network_id = price.sk_in_network_id
-inner join (hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_par_providers) provider_ref
-	on price.sk_rate_id = provider_ref.sk_rate_id
-inner join (hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer) provider
-	on provider_ref.provider_reference_id = provider.provider_group_id
-		and tin.value= {tin}--pick a random provider practice
-""").show()
+# MAGIC %sql
+# MAGIC 
+# MAGIC CREATE WIDGET TEXT billing_code DEFAULT "43283"; 
+# MAGIC 
+# MAGIC CREATE WIDGET TEXT tin_value DEFAULT "161294447";
+# MAGIC 
+# MAGIC SELECT billing_code, description, billing_class, billing_code_modifier, service_code, negotiated_rate, npi, tin
+# MAGIC FROM hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes proc
+# MAGIC inner join hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_prices price
+# MAGIC 	on proc.sk_in_network_id = price.sk_in_network_id
+# MAGIC inner join (hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_par_providers) provider_ref
+# MAGIC 	on price.sk_rate_id = provider_ref.sk_rate_id
+# MAGIC inner join (hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer) provider
+# MAGIC 	on provider_ref.provider_reference_id = provider.provider_group_id
+# MAGIC where billing_code = getArgument('billing_code')
+# MAGIC 	and negotiation_arrangement = 'ffs' and tin.value= getArgument('tin_value') 
+
+# COMMAND ----------
+
+

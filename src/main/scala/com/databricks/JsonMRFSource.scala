@@ -83,9 +83,9 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
           val endOfArray = ByteParser.seekEndOfArray(buffer, startIndex, bytesRead)
           endOfArray match { 
             case (ByteParser.EOB, ByteParser.EOB) =>  //what if there is no valid array split OR end of Array in our Byte String?
-              return (Some(buffer), headerKey)
+              return (Some(buffer.slice(startIndex, bytesRead)), headerKey)
             case (-1, _) => //unable to even find a split point in the buffer
-              (Some(buffer), headerKey)
+              return (Some(buffer.slice(startIndex, bytesRead)), headerKey)
             case (x, ByteParser.EOB) => //Array has not ended, but x is a valid offset to save
               val i = ByteParser.skipWhiteSpaceAndCommaLeft(buffer, x+1, bytesRead)
               this.synchronized {

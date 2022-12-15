@@ -28,10 +28,10 @@
 
 # COMMAND ----------
 
-# MAGIC %sh
+# MAGIC %sh -e
 # MAGIC #Download to DBFS storage
 # MAGIC mkdir -p /dbfs/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/
-# MAGIC wget https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/releases/download/03.0v/payer-mrf-streamsource-0.3.0.jar -O /dbfs/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.0.jar
+# MAGIC wget https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/releases/download/0.3.1v/payer-mrf-streamsource-0.3.1.jar -O /dbfs/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.1.jar
 
 # COMMAND ----------
 
@@ -63,7 +63,7 @@ job_json = {
                 },
                 "libraries": [
                     {
-                        "jar": "dbfs:///databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.0.jar"
+                        "jar": "dbfs:/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.1.jar"
                     }
                 ],
                 "depends_on": [
@@ -82,12 +82,12 @@ job_json = {
                     "spark_version": "10.4.x-scala2.12",
                 "spark_conf": {
                     "spark.rpc.message.maxSize": "1024",
-                    "spark.driver.memory": "12g",
-                    "spark.driver.cores": "2",
-                    "spark.driver.extraJavaOptions": "-Xmx8g -Xms8g" #?????? is this on driver or executor? on executor use spark.executor.extraJavaOptions
+                    "spark.driver.cores": "3", # 1 reader, 1 offset writer, 1 for spark tasks
+                    "spark.executor.cores": "2",
+                    "spark.executor.instances": "4"
                     },
-                    "num_workers": 1,
-                    "node_type_id": {"AWS": "i3.xlarge", "MSA": "Standard_DS3_v2", "GCP": "n1-highmem-4"},
+                    "num_workers": 4,
+                    "node_type_id": {"AWS": "i3.xlarge", "MSA": "Standard_L4s", "GCP": "n1-highmem-4"},
                     "custom_tags": {
                         "usage": "solacc_testing"
                     },
