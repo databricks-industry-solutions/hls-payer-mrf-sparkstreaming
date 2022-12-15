@@ -13,11 +13,6 @@ CMS Schemas for MRF are built using a single json object which spark by default 
 Note attach jar package to your Spark 3.2.1, Scala 2.12 cluster from the "latest" release here
 
 ``` python
-spark.executor.cores 2
-spark.executor.memory 5g
-spark.executor.defaultJavaOptions -Xmx12g -Xms4g
-spark.executor.instances 4
-spark.driver.defaultJavaOptions -Xmx16g -Xms8g
 spark.driver.cores 3
 spark.driver.memory 8g
 spark.rpc.message.maxSize 1024
