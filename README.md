@@ -7,18 +7,11 @@ CMS Schemas for MRF are built using a single json object which spark by default 
 
 
 
-
-## Recommended Spark Settings
-
-Note attach jar package to your Spark 3.2.1, Scala 2.12 cluster from the "latest" release here
-
-``` python
-spark.driver.cores 3
-spark.driver.memory 8g
-spark.rpc.message.maxSize 1024
-```
-
 ## Running
+
+### Attaching Library to Cluster 
+
+Note: attach jar package to your **Spark 3.2.1, Scala 2.12** cluster from the "latest" release here
 
 ### Getting Sample Data
 ``` bash
@@ -122,18 +115,32 @@ Here are some of the USA's larger payers and landing page
 ## Meeting CMS 2023, 2024 Comparison Mandates
 Check out the demo notebook ***01_payer_mrf_demo.py*** to ingest, split, create a simple data model, and a lightweight query for complying with the CMS mandates for comparable prices.
 
-## Contributing to the package
 
-### building
+## F.A.Q.
+
+1. How fast can it parse? 
+
+On a local spark cluster with xmx8g processing around 5-7GB per minute. Note of caution, this program depends on a few things which can cause varrying results. E.g. Some forms of .gz extension do not enable efficient buffering in the JVM. It is recommended to gunzip -d the file first prior to running
+
+2. What is the recommended cluster settings? 
+
+Having 2 executors and these Spark settings should be enough to get started. When running multiple files in parallel you'll want to increase the # of executors, and potentially increase the driver size.
+
+``` python
+spark.driver.cores 3
+spark.driver.memory 8g
+spark.rpc.message.maxSize 1024
+```
+
+3. Can I contribute to the package? 
+
+Yes, package is released under Databricks License and built in SBT. 
+
+#### building
 ```scala
 sbt package
 ```
-### testing
+#### running tests
 ```scala
 sbt test
 ```
-
-## Speed 
-
-On a local spark cluster with xmx8g processing around 5-7GB per minute. Note of caution, this program depends on buffering. Some forms of .gz extension do not enable efficient buffering in the JVM. It is recommended to gunzip -d the file first prior to running
-
