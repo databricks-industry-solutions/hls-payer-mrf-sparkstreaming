@@ -90,7 +90,7 @@ spark.read \
   .mode("overwrite") \
   .saveAsTable("hls_payer_transparency.in_network_rates_network_array")
 
-spark.table(target_table).printSchema()
+spark.table("hls_payer_transparency.in_network_rates_network_array").printSchema()
 # billing_code:string
 # billing_code_type:string
 # billing_code_type_version:string
