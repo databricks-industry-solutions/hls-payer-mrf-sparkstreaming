@@ -29,6 +29,13 @@ libraryDependencies ++= sparkDependencies ++ testDependencies ++ coreDependencie
 
 assemblyJarName := s"${name.value}-${version.value}_assembly.jar"
 
+assembly /assemblyMergeStrategy := {
+  case "reference.conf" => MergeStrategy.concat
+  case "META-INF/services/org.apache.spark.sql.sources.DataSourceRegister" => MergeStrategy.concat
+  case PathList("META-INF", xs@_*) => MergeStrategy.discard
+  case _ => MergeStrategy.first
+}
+
 artifactName := { (sv: ScalaVersion, module: ModuleID, artifact: Artifact) =>
   s"${name.value}-${version.value}." + artifact.extension
 }

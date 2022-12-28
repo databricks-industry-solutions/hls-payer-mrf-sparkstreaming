@@ -44,7 +44,7 @@ spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_
 
 # COMMAND ----------
 
-df = spark.readStream.option("buffersize", 67108864).format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider").load(source_data)
+df = spark.readStream.option("buffersize", 67108864).format("payer-mrf").load(source_data)
 query = (
 df.writeStream 
  .outputMode("append") 

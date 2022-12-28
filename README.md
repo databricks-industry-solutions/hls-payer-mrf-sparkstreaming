@@ -30,7 +30,7 @@ dbfs_file_download_location="dbfs:/user/hive/warehouse/payer_transparency.db/raw
 target_table="hls_payer_transparency.in_network_rates_sample"
 
 df = spark.readStream \
-    .format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider") \
+    .format("payer-mrf") \
     .load(dbfs_file_download_location)
 ```
 
