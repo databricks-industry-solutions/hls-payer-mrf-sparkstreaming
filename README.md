@@ -5,7 +5,7 @@
 
 CMS Schemas for MRF are built using a single json object which spark by default cannot split. Reading these large files often results in Out of Memory errors. This parser serves to transform any array objects under the header into multiple splittable lists that can be parsed. See sample schemas here ->  https://github.com/CMSgov/price-transparency-guide/tree/master/schemas
 
-
+![alt text](./spark-streaming-payer-mrf.png)
 
 ## Running
 
@@ -102,8 +102,8 @@ spark.table("hls_payer_transparency.in_network_rates_network_array").printSchema
 
 ```
 
-## Meeting CMS 2023, 2024 Comparison Mandates
-Check out the demo notebook ***01_payer_mrf_demo.py*** to ingest, split, create a simple data model, and a lightweight query for complying with the CMS mandates for comparable prices.
+## Meeting the CMS 2023, 2024 Price Comparison Mandates
+We build out a query to support this at the end of demo notebook ***01_payer_mrf_demo.py***. The notebook ingests, splits, and creates a simple data model, and a lightweight query for complying with the CMS mandates for shoppable prices.
 
 
 ## F.A.Q.
