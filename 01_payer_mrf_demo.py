@@ -14,19 +14,19 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Bronze 
+# MAGIC ### Bronze (Download, Unzip, and Parse via SparkStreaming )
 
 # COMMAND ----------
 
 # MAGIC %sh
-# MAGIC #(1) Download to DBFS storage
+# MAGIC # Download to DBFS storage
 # MAGIC mkdir -p /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/
 # MAGIC wget -O /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz  https://uhc-tic-mrf.azureedge.net/public-mrf/2022-12-01/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz
 
 # COMMAND ----------
 
 # MAGIC %sh 
-# MAGIC #(2) unzip in dbfs 
+# MAGIC # unzip in dbfs 
 # MAGIC gunzip -cd /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz  > /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json
 
 # COMMAND ----------
@@ -50,6 +50,7 @@ spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_
 
 # COMMAND ----------
 
+#Using 64MB as the default buffersize here
 df = spark.readStream.option("buffersize", 67108864).format("payer-mrf").load(source_data)
 query = (
 df.writeStream 
@@ -94,7 +95,7 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 
 # COMMAND ----------
 
-# MAGIC %md ### Silver 
+# MAGIC %md ### Silver (Create relational tables from nested array structures)
 # MAGIC ETL Curation to report off of 2023 mandate. Compare prices for a procedure (BILLING_CODE) within a provider group (TIN)
 
 # COMMAND ----------
@@ -171,8 +172,8 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Gold
-# MAGIC 2023 Shoppable prices using some random examples of billing code and provider practice
+# MAGIC ### Gold (Sample search query for price comparison)
+# MAGIC 2023/2024 Shoppable prices using some random examples of billing code and provider practice
 
 # COMMAND ----------
 
