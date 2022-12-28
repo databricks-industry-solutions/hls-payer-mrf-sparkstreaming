@@ -1,9 +1,15 @@
 # Databricks notebook source
 # MAGIC %md 
-# MAGIC ## Example Workflow 
-# MAGIC  Bronze (1) Download, (2) Unzip, (3) Stream  
-# MAGIC  Silver (1) Curation ETL into desired Data Model  
-# MAGIC  Gold (1) Serve Payer Transparency Comparison Tool (2023,2024) CMS Requirements
+# MAGIC ## Example Workflow Steps 
+# MAGIC > **Bronze**
+# MAGIC >> Download & Decompress   
+# MAGIC >> Stream Data  
+# MAGIC 
+# MAGIC > **Silver**  
+# MAGIC >> Curation ETL into desired Data Model    
+# MAGIC  
+# MAGIC > **Gold** 
+# MAGIC >> Query Meeting 2023, 2024 Price Comparison CMS Mandate
 
 # COMMAND ----------
 
@@ -90,11 +96,6 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 
 # MAGIC %md ### Silver 
 # MAGIC ETL Curation to report off of 2023 mandate. Compare prices for a procedure (BILLING_CODE) within a provider group (TIN)
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC set spark.sql.files.maxPartitionBytes=128m;
 
 # COMMAND ----------
 
@@ -191,7 +192,3 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # MAGIC 	on provider_ref.provider_reference_id = provider.provider_group_id
 # MAGIC where billing_code = getArgument('billing_code')
 # MAGIC 	and negotiation_arrangement = 'ffs' and tin.value= getArgument('tin_value') 
-
-# COMMAND ----------
-
-
