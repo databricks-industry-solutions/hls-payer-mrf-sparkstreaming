@@ -1,6 +1,6 @@
 name := "payer-mrf-streamsource"
 
-version := "0.3.1"
+version := "0.3.2"
 
 lazy val scala212 = "2.12.8"
 lazy val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "3.2.1")
@@ -28,6 +28,13 @@ val coreDependencies = Seq(
 libraryDependencies ++= sparkDependencies ++ testDependencies ++ coreDependencies
 
 assemblyJarName := s"${name.value}-${version.value}_assembly.jar"
+
+assembly /assemblyMergeStrategy := {
+  case "reference.conf" => MergeStrategy.concat
+  case "META-INF/services/org.apache.spark.sql.sources.DataSourceRegister" => MergeStrategy.concat
+  case PathList("META-INF", xs@_*) => MergeStrategy.discard
+  case _ => MergeStrategy.first
+}
 
 artifactName := { (sv: ScalaVersion, module: ModuleID, artifact: Artifact) =>
   s"${name.value}-${version.value}." + artifact.extension

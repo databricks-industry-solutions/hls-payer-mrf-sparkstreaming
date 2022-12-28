@@ -11,14 +11,14 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
 
   test("Streaming Query Tests") {
     val df = ( spark.readStream 
-      .format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider") 
+      .format("payer-mrf")
       .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample.json")
     )
     val query = (
       df.writeStream
         .outputMode("append")
         .format("parquet")
-        .queryName("The JSON splitter")
+        .queryName("The Json splitter")
         .option("checkpointLocation", "src/test/resources/temp_ffs_sample_chkpoint_dir")
         .start("src/test/resources/temp_ffs_sample")
     )
@@ -36,7 +36,7 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
 
   test("Results are all valid JSON objects"){
     val df = ( spark.readStream
-      .format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider")
+      .format("payer-mrf")
       .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample.json")
     )
 
@@ -61,7 +61,7 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
 
   test("Spark Streaming Results Format Tests"){
     val df = ( spark.readStream
-      .format("com.databricks.labs.sparkstreaming.jsonmrf.JsonMRFSourceProvider")
+      .format("payer-mrf")
       .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample.json")
     )
     val query = (
