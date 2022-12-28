@@ -102,16 +102,6 @@ spark.table("hls_payer_transparency.in_network_rates_network_array").printSchema
 
 ```
 
-## Where to get MRF Files? 
-
-Here are some of the USA's larger payers and landing page
-1. UHG https://transparency-in-coverage.uhc.com/
-2. Anthem https://www.anthem.com/machine-readable-file/search/
-3. Cigna https://www.cigna.com/legal/compliance/machine-readable-files
-4. Aetna https://health1.aetna.com/app/public/#/one/insurerCode=AETNACVS_I&brandCode=ALICSI/machine-readable-transparency-in-coverage?reportingEntityType=Third%20Party%20Administrator_6644&lock=true
-5. Humana https://developers.humana.com/syntheticdata/Resource/PCTFilesList?fileType=innetwork
-
-
 ## Meeting CMS 2023, 2024 Comparison Mandates
 Check out the demo notebook ***01_payer_mrf_demo.py*** to ingest, split, create a simple data model, and a lightweight query for complying with the CMS mandates for comparable prices.
 
@@ -144,3 +134,14 @@ sbt package
 ```scala
 sbt test
 ```
+
+4. Where to get Payer MRF Files? 
+
+Here are some of the USA's larger payers and landing page
+ - UHG https://transparency-in-coverage.uhc.com/
+ - Anthem https://www.anthem.com/machine-readable-file/search/
+ - Cigna https://www.cigna.com/legal/compliance/machine-readable-files
+ - Aetna https://health1.aetna.com/app/public/#/one/insurerCode=AETNACVS_I&brandCode=ALICSI/machine-readable-transparency-in-coverage?reportingEntityType=Third%20Party%20Administrator_6644&lock=true
+ - Humana https://developers.humana.com/syntheticdata/Resource/PCTFilesList?fileType=innetwork
+
+
