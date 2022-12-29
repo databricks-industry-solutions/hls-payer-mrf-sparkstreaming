@@ -19,6 +19,9 @@
 # COMMAND ----------
 
 # MAGIC %sh
+# MAGIC #clean up any old data
+# MAGIC rm -rf /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/payer_transparency_ingest
+# MAGIC 
 # MAGIC # Download to DBFS storage
 # MAGIC mkdir -p /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/
 # MAGIC wget -O /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz  https://uhc-tic-mrf.azureedge.net/public-mrf/2022-12-01/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz
@@ -32,15 +35,17 @@
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC --Create database
 # MAGIC create database if not exists hls_dev_payer_transparency;
 
 # COMMAND ----------
 
+# Location of the unzipped json file
 source_data = "dbfs:/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json"
 
 # COMMAND ----------
 
-# reinitialize tables to be created in this notebook
+# Reinitialize tables to be created in this notebook
 spark.sql("DROP TABLE IF EXISTS hls_dev_payer_transparency.payer_transparency_ingest")
 spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_ingest_in_network""")
 dbutils.fs.rm(source_data + "_checkpoint", True)
@@ -50,7 +55,8 @@ spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_
 
 # COMMAND ----------
 
-#Using 64MB as the default buffersize here
+# Streaming the json file to delta table
+# Setting of 64MB as the default buffersize to stream 
 df = spark.readStream.option("buffersize", 67108864).format("payer-mrf").load(source_data)
 query = (
 df.writeStream 
@@ -64,6 +70,7 @@ df.writeStream
 
 # COMMAND ----------
 
+# Waiting for the stream to complete 
 import time
 lastBatch = -2 #Spark batches start at -1
 print("sleep for 30 seconds, then check query")
@@ -83,12 +90,21 @@ print("Query finished")
 
 # COMMAND ----------
 
+# Mapping to RDDs where json schema can be inferred when creating a dataframe
+# Schemas will be distinct between
+# 1. in_network array
+# 2. provider_references array 
+# 3. Any other header information
+
 provider_references_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key='provider_references'").rdd.flatMap(lambda x:x)
+
 header_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key=''").rdd.flatMap(lambda x:x)
+
 in_network_rdd = spark.sql("select json_payload from hls_dev_payer_transparency.payer_transparency_ingest where header_key='in_network'").rdd.flatMap(lambda x:x)
 
 # COMMAND ----------
 
+# Creating Dataframes from the 3 distinct schemas above and saving to a table
 spark.read.json(header_rdd).write.mode("overwrite").saveAsTable("hls_dev_payer_transparency.payer_transparency_in_network_provider_header")
 spark.read.json(provider_references_rdd).write.mode("overwrite").saveAsTable("hls_dev_payer_transparency.payer_transparency_in_network_provider_references")
 spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_payer_transparency.payer_transparency_in_network_in_network")
@@ -101,6 +117,9 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # COMMAND ----------
 
 # MAGIC %sql
+# MAGIC --Exploding each nested array producing a 1:M relationship between tables
+# MAGIC --  Creating surrogate keys with UUID() function to easily join tables
+# MAGIC 
 # MAGIC --Provider References X Payer
 # MAGIC drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer;
 # MAGIC create table hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer
