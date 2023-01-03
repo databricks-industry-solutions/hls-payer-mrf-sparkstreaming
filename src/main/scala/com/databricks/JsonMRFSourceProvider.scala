@@ -9,11 +9,12 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 class JsonMRFSourceProvider extends StreamSourceProvider with DataSourceRegister with StreamSinkProvider {
 
   override def shortName(): String = "payer-mrf"
+
   override def sourceSchema(sqlContext: SQLContext,
     schema: Option[StructType],
     providerName: String,
     parameters: Map[String, String]): (String, StructType) = {
-    (shortName(), JsonMRFSource.schema)
+    (shortName(), JsonMRFSource.getSchema(parameters))
   }
 
   override def createSource(sqlContext: SQLContext,

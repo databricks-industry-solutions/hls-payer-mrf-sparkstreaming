@@ -23,7 +23,8 @@ case class JsonPartition(start: Long, end: Long,  headerKey: String = "", idx: I
 private class JsonMRFRDD(
   sc: SparkContext,
   partitions: Array[JsonPartition],
-  fileName: Path)
+  fileName: Path,
+  payloadAsArray: Boolean = false)
     extends RDD[InternalRow](sc, Nil) {
 
   override def getPartitions: Array[Partition] = {
@@ -50,12 +51,31 @@ private class JsonMRFRDD(
         buffer = Array('{'.toByte) ++ buffer
       if( buffer(ByteParser.skipWhiteSpaceRight(buffer, (part.end - part.start).toInt, (part.end - part.start + 1).toInt)) != ByteParser.CloseB)
         buffer = buffer  :+ '}'.toByte
+      Seq(InternalRow(
+        UTF8String.fromString(fileName.getName),
+        UTF8String.fromString(part.headerKey),
+        UTF8String.fromBytes(buffer)
+      )).toIterator
     }
     else{
-      //this is an array, make sure it starts and ends with brackets
-      buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
+      if (payloadAsArray)
+        Seq(InternalRow(
+          UTF8String.fromString(fileName.getName),
+          UTF8String.fromString(part.headerKey),
+          //TODO Left off here... Need to create f(array[byte]) => array(String), maybe foldLeft is elegant to do so? 
+          UTF8String.fromBytes(buffer)
+        )).toIterator
+      else{
+        //this is an array, make sure it starts and ends with brackets
+        buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
+        Seq(InternalRow(
+          UTF8String.fromString(fileName.getName),
+          UTF8String.fromString(part.headerKey),
+          UTF8String.fromBytes(buffer)
+        )).toIterator
+      }
     }
-    Seq(InternalRow(UTF8String.fromString(fileName.getName), UTF8String.fromString(part.headerKey), UTF8String.fromBytes(buffer))).toIterator
+
   }
 }
 
