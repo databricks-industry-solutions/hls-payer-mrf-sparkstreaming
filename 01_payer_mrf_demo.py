@@ -18,10 +18,20 @@
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/feature-json-as-array/img/bronze1.png?raw=true)
+
+# COMMAND ----------
+
 # MAGIC %sh
 # MAGIC # Download to DBFS storage
 # MAGIC mkdir -p /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/
 # MAGIC wget -O /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz  https://uhc-tic-mrf.azureedge.net/public-mrf/2022-12-01/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/feature-json-as-array/img/bronze2.png?raw=true)
 
 # COMMAND ----------
 
@@ -50,6 +60,12 @@ spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/feature-json-as-array/img/bronze3.1.png?raw=True)
+
+# COMMAND ----------
+
+#Read file as a stream and write to Delta
 #Using 64MB as the default buffersize here
 df = spark.readStream.option("buffersize", 67108864).format("payer-mrf").load(source_data)
 query = (
@@ -97,6 +113,11 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 
 # MAGIC %md ### Silver (Create relational tables from nested array structures)
 # MAGIC ETL Curation to report off of 2023 mandate. Compare prices for a procedure (BILLING_CODE) within a provider group (TIN)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/feature-json-as-array/img/silver.jpg?raw=True)
 
 # COMMAND ----------
 
