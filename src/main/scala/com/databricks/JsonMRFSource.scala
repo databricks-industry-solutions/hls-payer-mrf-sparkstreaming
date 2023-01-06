@@ -9,7 +9,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, Source}
-import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType, ArrayType}
 import org.apache.spark.sql.{DataFrame, SQLContext, Row}
 import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
 import org.apache.spark.sql.execution.LogicalRDD
@@ -30,6 +30,11 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   var offset: LongOffset = LongOffset(-1)
   var lastOffset: LongOffset = LongOffset(-2)
   var batches = ListBuffer.empty[(JsonPartition, Long)] // (tuple of (tuple of file start offset, file end offset), spark offset)
+  val payLoadAsArray =  options.get("payloadAsArray") match {
+    case Some("true") => true
+    case _ => false
+  }
+
   val BufferSize: Int = options.get("buffersize") match {
     case Some(x) => Integer.parseInt(x)
     case _ => 268435456 //256MB default 
@@ -52,7 +57,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     case _ => throw new Exception("codec for file extension not implemented yet")
   }
 
-  override def schema: StructType = JsonMRFSource.schema
+  override def schema: StructType = JsonMRFSource.getSchema(payLoadAsArray)
   override def getOffset: Option[Offset] = this.synchronized {
     if (offset == -1) None else Some(offset)
   }
@@ -208,7 +213,8 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     val catalystRows = new JsonMRFRDD(
       sqlContext.sparkContext,
       batches.par.filter{ case (_, idx) => idx >= s && idx <= e}.zipWithIndex.map({ case (v, idx2) => new JsonPartition(v._1.start, v._1.end, v._1.headerKey, idx2)}).toArray,
-      fileName
+      fileName,
+      payLoadAsArray
     )
     /*
      * Give the Spark an execution plan on turning an array of offsets into an RDD of data from those offsets
@@ -216,7 +222,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
      *  Partition[offset1, offset2...) -> RDD(Row1, Row2...)
      */
     val logicalPlan = LogicalRDD(
-      JsonMRFSource.schemaAttributes,
+      JsonMRFSource.getSchemaAttributes(payLoadAsArray),
       catalystRows,
       isStreaming = true)(sqlContext.sparkSession)
 
@@ -243,6 +249,21 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
 }
 
 object JsonMRFSource {
-  lazy val schema = StructType(List(StructField("file_name",StringType), StructField("header_key", StringType), StructField("json_payload", StringType))) //we're defining a generic string type for our JSON payloads
-  lazy val schemaAttributes = Seq(AttributeReference("file_name", StringType, nullable = false)(), AttributeReference("header_key", StringType, nullable=true)(), AttributeReference("json_payload", StringType, nullable = true)())
+  lazy val schema = StructType(List(
+    StructField("file_name",StringType),
+    StructField("header_key", StringType)
+  ))
+
+  def getSchema(payLoadAsArray: Boolean): StructType = {
+    if (payLoadAsArray) schema.add("json_payload", ArrayType(StringType)) else schema.add("json_payload", StringType)
+  }
+
+  lazy val schemaAttributes = Seq(
+    AttributeReference("file_name", StringType, nullable = false)(),
+    AttributeReference("header_key", StringType, nullable=true)()
+  )
+
+  def getSchemaAttributes(payLoadAsArray: Boolean): Seq[AttributeReference] = {
+    if (payLoadAsArray) schemaAttributes ++ Seq(AttributeReference("json_payload", ArrayType(StringType), nullable = true)()) else schemaAttributes ++ Seq(AttributeReference("json_payload", StringType, nullable = true)())
+  }
 }

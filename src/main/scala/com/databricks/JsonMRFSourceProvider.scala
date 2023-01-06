@@ -14,7 +14,12 @@ class JsonMRFSourceProvider extends StreamSourceProvider with DataSourceRegister
     schema: Option[StructType],
     providerName: String,
     parameters: Map[String, String]): (String, StructType) = {
-    (shortName(), JsonMRFSource.getSchema(parameters))
+    (shortName(), JsonMRFSource.getSchema({
+      parameters.get("payLoadAsArray") match {
+        case Some("true") => true
+        case _ => false
+      }
+    }))
   }
 
   override def createSource(sqlContext: SQLContext,

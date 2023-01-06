@@ -7,6 +7,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.{InterruptibleIterator, Partition, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.hadoop.fs.{FileSystem, Path, FSDataInputStream}
 import java.io.BufferedInputStream
 import scala.util.Random
@@ -41,41 +42,42 @@ private class JsonMRFRDD(
     val part = thePart.asInstanceOf[JsonPartition]
     in.seek(part.start)
 
-    var buffer = new Array[Byte](( part.end - part.start + 1).toInt)
+    val buffersize = ( part.end - part.start + 1).toInt
+    var buffer = new Array[Byte](buffersize)
     ByteStreams.readFully(in, buffer)
     in.close
     //Make the header data valid JSON values
     if (part.headerKey == ""){
       //startByte and the endBytes should be '{' or '}' in a header
-      if( buffer(ByteParser.skipWhiteSpaceLeft(buffer, 0, (part.end - part.start + 1).toInt)) != ByteParser.OpenB )
+      if( buffer(ByteParser.skipWhiteSpaceLeft(buffer, 0, buffersize)) != ByteParser.OpenB )
         buffer = Array('{'.toByte) ++ buffer
-      if( buffer(ByteParser.skipWhiteSpaceRight(buffer, (part.end - part.start).toInt, (part.end - part.start + 1).toInt)) != ByteParser.CloseB)
+      if( buffer(ByteParser.skipWhiteSpaceRight(buffer, buffersize-1, buffersize)) != ByteParser.CloseB)
         buffer = buffer  :+ '}'.toByte
+    }
+    if (payloadAsArray){ //returns the json payload as an Array[String] instead of a String
+      var arr = Array[UTF8String]()
+      var prev = 0
+      var idx = 0
+      while( 0 <= idx && idx < buffersize ){
+        idx = ByteParser.seekMatchingEndBracket(buffer, idx, buffersize) 
+        arr :+ UTF8String.fromBytes(buffer.slice(prev, idx))
+        prev = idx
+      }
+      Seq(InternalRow(
+        UTF8String.fromString(fileName.getName),
+        UTF8String.fromString(part.headerKey),
+        ArrayData.toArrayData(arr)
+      )).toIterator
+    }
+    else{
+      //return the json_payload as a String
+      buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
       Seq(InternalRow(
         UTF8String.fromString(fileName.getName),
         UTF8String.fromString(part.headerKey),
         UTF8String.fromBytes(buffer)
       )).toIterator
     }
-    else{
-      if (payloadAsArray)
-        Seq(InternalRow(
-          UTF8String.fromString(fileName.getName),
-          UTF8String.fromString(part.headerKey),
-          //TODO Left off here... Need to create f(array[byte]) => array(String), maybe foldLeft is elegant to do so? 
-          UTF8String.fromBytes(buffer)
-        )).toIterator
-      else{
-        //this is an array, make sure it starts and ends with brackets
-        buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
-        Seq(InternalRow(
-          UTF8String.fromString(fileName.getName),
-          UTF8String.fromString(part.headerKey),
-          UTF8String.fromBytes(buffer)
-        )).toIterator
-      }
-    }
-
   }
 }
 
