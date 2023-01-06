@@ -15,7 +15,7 @@ class JsonMRFSourceProvider extends StreamSourceProvider with DataSourceRegister
     providerName: String,
     parameters: Map[String, String]): (String, StructType) = {
     (shortName(), JsonMRFSource.getSchema({
-      parameters.get("payLoadAsArray") match {
+      parameters.get("payloadAsArray") match {
         case Some("true") => true
         case _ => false
       }

@@ -226,7 +226,9 @@ object ByteParser{
     startIndex match {
       case EOB => return EOB
       case x =>
-        if ( arr(startIndex).toInt != OpenB && arr(startIndex).toInt != OpenL ) throw new Exception("Did not see a correct opening brace/bracket to start function. startIndex " +startIndex + " Last Byte consumed: " + arr(startIndex).toChar)
+        if ( arr(startIndex).toInt != OpenB && arr(startIndex).toInt != OpenL )
+          throw new Exception("Did not see a correct opening brace/bracket to start function. startIndex " +startIndex +
+            " Last Byte consumed: " + arr(startIndex).toChar)
     }
 
     var prev = -1

@@ -91,7 +91,7 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
   test("Streaming Query w/ json payload as an Array"){
     val df = ( spark.readStream
       .format("payer-mrf")
-      .option("payLoadAsArray", "true")
+      .option("payloadAsArray", "true")
       .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample.json")
     )
     val query = (

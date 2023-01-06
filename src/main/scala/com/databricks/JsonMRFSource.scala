@@ -30,7 +30,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
   var offset: LongOffset = LongOffset(-1)
   var lastOffset: LongOffset = LongOffset(-2)
   var batches = ListBuffer.empty[(JsonPartition, Long)] // (tuple of (tuple of file start offset, file end offset), spark offset)
-  val payLoadAsArray =  options.get("payloadAsArray") match {
+  val payloadAsArray =  options.get("payloadAsArray") match {
     case Some("true") => true
     case _ => false
   }
@@ -57,7 +57,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
     case _ => throw new Exception("codec for file extension not implemented yet")
   }
 
-  override def schema: StructType = JsonMRFSource.getSchema(payLoadAsArray)
+  override def schema: StructType = JsonMRFSource.getSchema(payloadAsArray)
   override def getOffset: Option[Offset] = this.synchronized {
     if (offset == -1) None else Some(offset)
   }
@@ -214,7 +214,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       sqlContext.sparkContext,
       batches.par.filter{ case (_, idx) => idx >= s && idx <= e}.zipWithIndex.map({ case (v, idx2) => new JsonPartition(v._1.start, v._1.end, v._1.headerKey, idx2)}).toArray,
       fileName,
-      payLoadAsArray
+      payloadAsArray
     )
     /*
      * Give the Spark an execution plan on turning an array of offsets into an RDD of data from those offsets
@@ -222,7 +222,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
      *  Partition[offset1, offset2...) -> RDD(Row1, Row2...)
      */
     val logicalPlan = LogicalRDD(
-      JsonMRFSource.getSchemaAttributes(payLoadAsArray),
+      JsonMRFSource.getSchemaAttributes(payloadAsArray),
       catalystRows,
       isStreaming = true)(sqlContext.sparkSession)
 
@@ -254,8 +254,8 @@ object JsonMRFSource {
     StructField("header_key", StringType)
   ))
 
-  def getSchema(payLoadAsArray: Boolean): StructType = {
-    if (payLoadAsArray) schema.add("json_payload", ArrayType(StringType)) else schema.add("json_payload", StringType)
+  def getSchema(payloadAsArray: Boolean): StructType = {
+    if (payloadAsArray) schema.add("json_payload", ArrayType(StringType)) else schema.add("json_payload", StringType)
   }
 
   lazy val schemaAttributes = Seq(
@@ -263,7 +263,7 @@ object JsonMRFSource {
     AttributeReference("header_key", StringType, nullable=true)()
   )
 
-  def getSchemaAttributes(payLoadAsArray: Boolean): Seq[AttributeReference] = {
-    if (payLoadAsArray) schemaAttributes ++ Seq(AttributeReference("json_payload", ArrayType(StringType), nullable = true)()) else schemaAttributes ++ Seq(AttributeReference("json_payload", StringType, nullable = true)())
+  def getSchemaAttributes(payloadAsArray: Boolean): Seq[AttributeReference] = {
+    if (payloadAsArray) schemaAttributes ++ Seq(AttributeReference("json_payload", ArrayType(StringType), nullable = true)()) else schemaAttributes ++ Seq(AttributeReference("json_payload", StringType, nullable = true)())
   }
 }
