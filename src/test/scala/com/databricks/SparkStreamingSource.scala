@@ -102,18 +102,17 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
         .option("checkpointLocation", "src/test/resources/temp_ffs_array_rdd_chkpoint_dir")
         .start("src/test/resources/temp_ffs_array_rdd")
     )
+    Thread.sleep(5 * 1000)
+    assert(query.isActive)
     query.processAllAvailable
     query.stop
     assert(!query.isActive)
 
     val resultDF = spark.read.format("parquet").load("src/test/resources/temp_ffs_array_rdd")
-    val rdd = resultDF.filter(resultDF("header_key") === "in_network").select(resultDF("json_payload")).rdd.map(row => row.getString(0))
-    val jsonDF = spark.read.json(rdd)
-    assert(!jsonDF.columns.contains("_corrupt_record"))
-    assert(jsonDF.count >= 1)
+    assert(resultDF.count >= 1)
 
-    //val jsonCollection = resultDF.select(resultDF("json_payload")).collect
-    //jsonCollection.map(row => row.getAs[Seq[String]](0).map(x => Json.parse(x))) //assert each element of array is a json object
+    val jsonCollection = resultDF.select(resultDF("json_payload")).collect
+    jsonCollection.map(row => row.getAs[Seq[String]](0).map(x => Json.parse(x))) //assert each element of array is a json object
   }
 
 

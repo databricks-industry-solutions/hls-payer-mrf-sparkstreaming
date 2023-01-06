@@ -56,13 +56,13 @@ private class JsonMRFRDD(
     }
     if (payloadAsArray){ //returns the json payload as an Array[String] instead of a String
       var arr = Array[UTF8String]()
-      var prev = 0
-      var idx = 0
-      while( 0 <= idx && idx < buffersize ){
-        idx = ByteParser.seekMatchingEndBracket(buffer, idx, buffersize) 
-        arr :+ UTF8String.fromBytes(buffer.slice(prev, idx))
-        prev = idx
-      }
+      var start = 0
+      var finish = 0
+      do {
+        finish = ByteParser.seekMatchingEndBracket(buffer, start, buffersize+1)
+        arr :+ UTF8String.fromBytes(buffer.slice(start, finish))
+        start = ByteParser.arrayHasNext(buffer, finish, buffersize)
+      } while( 0 <= start && finish < buffersize )
       Seq(InternalRow(
         UTF8String.fromString(fileName.getName),
         UTF8String.fromString(part.headerKey),
