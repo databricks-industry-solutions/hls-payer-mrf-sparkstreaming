@@ -19,7 +19,7 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/feature-json-as-array/img/bronze1.png?raw=true)
+# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/main/img/bronze1.png?raw=true)
 
 # COMMAND ----------
 
@@ -31,7 +31,7 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/feature-json-as-array/img/bronze2.png?raw=true)
+# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/main/img/bronze2.png?raw=true)
 
 # COMMAND ----------
 
@@ -61,7 +61,7 @@ spark.sql("""drop table if exists hls_dev_payer_transparency.payer_transparency_
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/feature-json-as-array/img/bronze3.1.png?raw=True)
+# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/main/img/bronze3.1.png?raw=True)
 
 # COMMAND ----------
 
@@ -117,7 +117,7 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/feature-json-as-array/img/silver.jpg?raw=True)
+# MAGIC ![logo](https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/blob/main/img/silver.jpg?raw=True)
 
 # COMMAND ----------
 
