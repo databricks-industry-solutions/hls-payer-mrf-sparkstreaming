@@ -1,6 +1,6 @@
 name := "payer-mrf-streamsource"
 
-version := "0.3.2"
+version := "0.3.3"
 
 lazy val scala212 = "2.12.8"
 lazy val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "3.2.1")
