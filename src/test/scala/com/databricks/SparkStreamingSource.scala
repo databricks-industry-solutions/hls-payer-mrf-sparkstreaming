@@ -7,6 +7,8 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.functions._
 import play.api.libs.json.Json
 
+import scala.collection.mutable
+
 class SparkStreamingSource extends BaseTest with BeforeAndAfter{
 
   test("Streaming Query Tests") {
@@ -112,6 +114,10 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
     assert(resultDF.count >= 1)
 
     val jsonCollection = resultDF.select(resultDF("json_payload")).collect
+
+    //checking if arrays are getting created
+    assert(jsonCollection(0).getAs[mutable.WrappedArray[String]](0).length >0)
+
     jsonCollection.map(row => row.getAs[Seq[String]](0).map(x => Json.parse(x))) //assert each element of array is a json object
   }
 

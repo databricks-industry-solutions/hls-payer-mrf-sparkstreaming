@@ -60,7 +60,7 @@ private class JsonMRFRDD(
       var finish = 0
       do {
         finish = ByteParser.seekMatchingEndBracket(buffer, start, buffersize+1)
-        arr :+ UTF8String.fromBytes(buffer.slice(start, finish))
+        arr = arr :+ UTF8String.fromBytes(buffer.slice(start, finish+1))
         start = ByteParser.arrayHasNext(buffer, finish, buffersize)
       } while( 0 <= start && finish < buffersize )
       Seq(InternalRow(
