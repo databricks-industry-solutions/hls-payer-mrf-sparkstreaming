@@ -11,7 +11,7 @@ CMS Schemas for MRF are built using a single json object which spark by default 
 
 ### Attaching Library to Cluster 
 
-Note: attach jar package to your **Spark 3.2.1, Scala 2.12** cluster from the "latest" release here
+Note: attach latest jar package to your **Spark 3.3.0, Scala 2.12** cluster from the "latest" release here
 
 ### Getting Sample Data
 ``` bash
