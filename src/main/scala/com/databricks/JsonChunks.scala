@@ -7,6 +7,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.{InterruptibleIterator, Partition, SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.hadoop.fs.{FileSystem, Path, FSDataInputStream}
 import java.io.BufferedInputStream
 import scala.util.Random
@@ -23,7 +24,8 @@ case class JsonPartition(start: Long, end: Long,  headerKey: String = "", idx: I
 private class JsonMRFRDD(
   sc: SparkContext,
   partitions: Array[JsonPartition],
-  fileName: Path)
+  fileName: Path,
+  payloadAsArray: Boolean = false)
     extends RDD[InternalRow](sc, Nil) {
 
   override def getPartitions: Array[Partition] = {
@@ -40,22 +42,42 @@ private class JsonMRFRDD(
     val part = thePart.asInstanceOf[JsonPartition]
     in.seek(part.start)
 
-    var buffer = new Array[Byte](( part.end - part.start + 1).toInt)
+    val buffersize = ( part.end - part.start + 1).toInt
+    var buffer = new Array[Byte](buffersize)
     ByteStreams.readFully(in, buffer)
     in.close
     //Make the header data valid JSON values
     if (part.headerKey == ""){
       //startByte and the endBytes should be '{' or '}' in a header
-      if( buffer(ByteParser.skipWhiteSpaceLeft(buffer, 0, (part.end - part.start + 1).toInt)) != ByteParser.OpenB )
+      if( buffer(ByteParser.skipWhiteSpaceLeft(buffer, 0, buffersize)) != ByteParser.OpenB )
         buffer = Array('{'.toByte) ++ buffer
-      if( buffer(ByteParser.skipWhiteSpaceRight(buffer, (part.end - part.start).toInt, (part.end - part.start + 1).toInt)) != ByteParser.CloseB)
+      if( buffer(ByteParser.skipWhiteSpaceRight(buffer, buffersize-1, buffersize)) != ByteParser.CloseB)
         buffer = buffer  :+ '}'.toByte
     }
-    else{
-      //this is an array, make sure it starts and ends with brackets
-      buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
+    if (payloadAsArray){ //returns the json payload as an Array[String] instead of a String
+      var arr = Array[UTF8String]()
+      var start = 0
+      var finish = 0
+      do {
+        finish = ByteParser.seekMatchingEndBracket(buffer, start, buffersize+1)
+        arr = arr :+ UTF8String.fromBytes(buffer.slice(start, finish+1))
+        start = ByteParser.arrayHasNext(buffer, finish, buffersize)
+      } while( 0 <= start && finish < buffersize )
+      Seq(InternalRow(
+        UTF8String.fromString(fileName.getName),
+        UTF8String.fromString(part.headerKey),
+        ArrayData.toArrayData(arr)
+      )).toIterator
     }
-    Seq(InternalRow(UTF8String.fromString(fileName.getName), UTF8String.fromString(part.headerKey), UTF8String.fromBytes(buffer))).toIterator
+    else{
+      //return the json_payload as a String
+      buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
+      Seq(InternalRow(
+        UTF8String.fromString(fileName.getName),
+        UTF8String.fromString(part.headerKey),
+        UTF8String.fromBytes(buffer)
+      )).toIterator
+    }
   }
 }
 
