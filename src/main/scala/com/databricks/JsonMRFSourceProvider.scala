@@ -1,10 +1,15 @@
 package com.databricks.labs.sparkstreaming.jsonmrf
 
+import com.google.common.io.ByteStreams
+import java.io.{InputStreamReader, BufferedInputStream, BufferedOutputStream}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.sources.{DataSourceRegister, StreamSinkProvider, StreamSourceProvider}
 import org.apache.spark.sql.streaming.OutputMode
+import java.util.zip.GZIPInputStream
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
 
 class JsonMRFSourceProvider extends StreamSourceProvider with DataSourceRegister with StreamSinkProvider {
 
@@ -27,8 +32,25 @@ class JsonMRFSourceProvider extends StreamSourceProvider with DataSourceRegister
     schema: Option[StructType],
     providerName: String,
     parameters: Map[String, String]): Source = {
-    //parameters["path" -> "data/filename.json"]
-    new JsonMRFSource(sqlContext, parameters)
+    //parameters["path" -> "data/filename.json.gz"]
+    //params["uncompressedPath" -> "data/filename.json"]
+    val params = parameters.get("path").get match {
+
+      case ext if ext.endsWith(".gz") =>
+        val fs = FileSystem.get(sqlContext.sparkSession.sessionState.newHadoopConf())
+        val inStream = new BufferedInputStream(new GZIPInputStream(fs.open(new Path(ext))), 268435456) //256MB
+        val outStream = new BufferedOutputStream(fs.create(new Path(ext.dropRight(3)) ,true))
+        ByteStreams.copy(inStream, outStream)
+        inStream.close
+        outStream.close
+        parameters  + ("uncompressedPath" -> ext.dropRight(3))
+
+      case ext if ext.endsWith(".json") =>
+        parameters + ("uncompressedPath" -> ext)
+
+      case _ => throw new Exception("codec for file extension not implemented yet")
+    }
+    new JsonMRFSource(sqlContext, params)
   }
 
 

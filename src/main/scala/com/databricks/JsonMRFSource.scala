@@ -2,8 +2,7 @@ package com.databricks.labs.sparkstreaming.jsonmrf
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import collection.mutable.{Stack, ListBuffer}
-import java.util.zip.GZIPInputStream
-import java.io.{InputStreamReader, BufferedInputStream}
+import java.io.{InputStreamReader, BufferedInputStream, BufferedOutputStream}
 import org.apache.spark.streaming.StreamingContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
@@ -49,13 +48,9 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       FileSystem.get(hadoopConf)
     case _ =>  FileSystem.get(hadoopConf)
   }
-  val fileName = new Path(options.get("path").get)
+  val fileName = new Path(options.get("uncompressedPath").get)
   val fileStream = fs.open(fileName)
-  val inStream = options.get("path").get match {
-    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), BufferSize) //Gzip compression testing
-    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, BufferSize) //256MB buffer
-    case _ => throw new Exception("codec for file extension not implemented yet")
-  }
+  val inStream =  new BufferedInputStream(fileStream, BufferSize) 
 
   override def schema: StructType = JsonMRFSource.getSchema(payloadAsArray)
   override def getOffset: Option[Offset] = this.synchronized {
