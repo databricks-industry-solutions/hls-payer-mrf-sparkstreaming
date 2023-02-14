@@ -1,5 +1,6 @@
 package com.databricks.labs.sparkstreaming.jsonmrf
 
+import java.nio.charset.StandardCharsets
 import collection.mutable.Stack
 object ByteParser{
 
@@ -226,9 +227,14 @@ object ByteParser{
     startIndex match {
       case EOB => return EOB
       case x =>
-        if ( arr(startIndex).toInt != OpenB && arr(startIndex).toInt != OpenL )
-          throw new Exception("Did not see a correct opening brace/bracket to start function. startIndex " +startIndex +
+        if ( arr(startIndex).toInt != OpenB && arr(startIndex).toInt != OpenL ) {
+          print(new String(arr.take(100), StandardCharsets.UTF_8))
+          print("......")
+          println(new String(arr.takeRight(100), StandardCharsets.UTF_8))
+
+          throw new Exception("Did not see a correct opening brace/bracket to start function. startIndex " + startIndex +
             " Last Byte consumed: " + arr(startIndex).toChar)
+        }
     }
 
     var prev = -1

@@ -3,16 +3,16 @@ package com.databricks.labs.sparkstreaming.jsonmrf
 
 import com.google.common.io.ByteStreams
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.unsafe.types.UTF8String
-import org.apache.spark.{InterruptibleIterator, Partition, SparkContext, TaskContext}
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.ArrayData
-import org.apache.hadoop.fs.{FileSystem, Path, FSDataInputStream}
+import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.{Partition, SparkContext, TaskContext}
+
 import java.io.BufferedInputStream
-import scala.util.Random
-import org.apache.spark.SerializableWritable
-import org.apache.spark.broadcast.Broadcast
+import java.nio.charset.StandardCharsets
+import java.util.zip.GZIPInputStream
 
 case class JsonPartition(start: Long, end: Long,  headerKey: String = "", idx: Int = 0 ) extends Partition{
   override def index: Int = idx
@@ -25,6 +25,7 @@ private class JsonMRFRDD(
   sc: SparkContext,
   partitions: Array[JsonPartition],
   fileName: Path,
+  bufferSize : Int,
   payloadAsArray: Boolean = false)
     extends RDD[InternalRow](sc, Nil) {
 
@@ -37,15 +38,29 @@ private class JsonMRFRDD(
   //Only ever returning one "row" with the iterator...
   //Maybe change this in the future to break apart the json object further into individual rows?
   override def compute(thePart: Partition, context: TaskContext): Iterator[InternalRow] =  {
-    val in = JsonMRFRDD.fs.open(fileName)
+
+    val fileStream = JsonMRFRDD.fs.open(fileName)
+
+    val in = fileName.getName match {
+      case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), bufferSize) //Gzip compression testing
+      case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, bufferSize) //256MB buffer
+      case _ => throw new Exception("codec for file extension not implemented yet")
+    }
+
     //Close out fis, bufferinputstream objects, etc
     val part = thePart.asInstanceOf[JsonPartition]
-    in.seek(part.start)
+    in.skip(part.start)
 
     val buffersize = ( part.end - part.start + 1).toInt
     var buffer = new Array[Byte](buffersize)
     ByteStreams.readFully(in, buffer)
     in.close
+
+    println("---------------------------------")
+    print(new String(buffer.take(50), StandardCharsets.UTF_8))
+    print("......")
+    println(new String(buffer.takeRight(50), StandardCharsets.UTF_8))
+
     //Make the header data valid JSON values
     if (part.headerKey == ""){
       //startByte and the endBytes should be '{' or '}' in a header
@@ -59,7 +74,16 @@ private class JsonMRFRDD(
       var start = 0
       var finish = 0
       do {
-        finish = ByteParser.seekMatchingEndBracket(buffer, start, buffersize+1)
+        try {
+          finish = ByteParser.seekMatchingEndBracket(buffer, start, buffersize + 1)
+        }catch{
+          case e:Throwable =>{
+            println(" Compute: start:"+part.start + " end:"+ part.end)
+            println(" Buffer : start:"+start + " end:"+ (buffersize + 1))
+            e.printStackTrace()
+           // throw e
+          }
+        }
         arr = arr :+ UTF8String.fromBytes(buffer.slice(start, finish+1))
         start = ByteParser.arrayHasNext(buffer, finish, buffersize)
       } while( 0 <= start && finish < buffersize )

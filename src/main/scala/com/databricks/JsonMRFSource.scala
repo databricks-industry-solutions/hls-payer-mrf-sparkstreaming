@@ -1,22 +1,16 @@
 package com.databricks.labs.sparkstreaming.jsonmrf
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
-import collection.mutable.{Stack, ListBuffer}
-import java.util.zip.GZIPInputStream
-import java.io.{InputStreamReader, BufferedInputStream}
-import org.apache.spark.streaming.StreamingContext
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, Source}
-import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType, ArrayType}
-import org.apache.spark.sql.{DataFrame, SQLContext, Row}
-import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
 import org.apache.spark.sql.execution.LogicalRDD
-import org.apache.spark.unsafe.types.UTF8String
-import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.conf.Configuration
-import org.apache.spark.SerializableWritable
+import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, Source}
+import org.apache.spark.sql.types.{ArrayType, StringType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, SQLContext}
+
+import java.io.BufferedInputStream
+import java.util.zip.GZIPInputStream
+import scala.collection.mutable.ListBuffer
 
 
 /*
@@ -214,6 +208,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       sqlContext.sparkContext,
       batches.par.filter{ case (_, idx) => idx >= s && idx <= e}.zipWithIndex.map({ case (v, idx2) => new JsonPartition(v._1.start, v._1.end, v._1.headerKey, idx2)}).toArray,
       fileName,
+      BufferSize,
       payloadAsArray
     )
     /*
