@@ -9,7 +9,6 @@ import org.apache.spark.sql.types.{ArrayType, StringType, StructField, StructTyp
 import org.apache.spark.sql.{DataFrame, SQLContext}
 
 import java.io.BufferedInputStream
-import java.util.zip.GZIPInputStream
 import scala.collection.mutable.ListBuffer
 
 
@@ -43,13 +42,9 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       FileSystem.get(hadoopConf)
     case _ =>  FileSystem.get(hadoopConf)
   }
-  val fileName = new Path(options.get("path").get)
+  val fileName = new Path(options.get("uncompressedPath").get)
   val fileStream = fs.open(fileName)
-  val inStream = options.get("path").get match {
-    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), BufferSize) //Gzip compression testing
-    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, BufferSize) //256MB buffer
-    case _ => throw new Exception("codec for file extension not implemented yet")
-  }
+  val inStream = new BufferedInputStream(fileStream, BufferSize) //256MB buffer
 
   override def schema: StructType = JsonMRFSource.getSchema(payloadAsArray)
   override def getOffset: Option[Offset] = this.synchronized {
@@ -208,7 +203,6 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       sqlContext.sparkContext,
       batches.par.filter{ case (_, idx) => idx >= s && idx <= e}.zipWithIndex.map({ case (v, idx2) => new JsonPartition(v._1.start, v._1.end, v._1.headerKey, idx2)}).toArray,
       fileName,
-      BufferSize,
       payloadAsArray
     )
     /*
