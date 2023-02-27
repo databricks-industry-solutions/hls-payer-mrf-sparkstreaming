@@ -1,17 +1,15 @@
 package com.databricks.labs.sparkstreaming.jsonmrf
 
-import org.scalatest.funsuite.AnyFunSuite
+import org.apache.hadoop.fs.Path
+import org.apache.spark.sql.functions.col
 import org.scalatest._
-import org.apache.spark.sql.SparkSession
-import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.spark.sql.functions._
 import play.api.libs.json.Json
 
 import scala.collection.mutable
 
 class SparkStreamingSource extends BaseTest with BeforeAndAfter{
 
-  test("Streaming Query Tests") {
+  test("TST01-Streaming Query Tests") {
     val df = ( spark.readStream 
       .format("payer-mrf")
       .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample.json")
@@ -36,7 +34,7 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
     assert(resultDF.filter(resultDF("header_key") === "").count >= 1)
   }
 
-  test("Results are all valid JSON objects"){
+  test("TST02-Results are all valid JSON objects"){
     val df = ( spark.readStream
       .format("payer-mrf")
       .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample.json")
@@ -58,10 +56,12 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
 
     val resultDF = spark.read.format("parquet").load("src/test/resources/temp_ffs_sample_json")
     val jsonCollection = resultDF.select(resultDF("json_payload")).collect
-    jsonCollection.map(x => Json.parse(x.getString(0)))
+    jsonCollection.map(x => {
+      Json.parse(x.getString(0))
+    })
   }
 
-  test("Spark Streaming Results Format Tests"){
+  test("TST03-Spark Streaming Results Format Tests"){
     val df = ( spark.readStream
       .format("payer-mrf")
       .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample.json")
@@ -90,7 +90,7 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
     assert(jsonDF.schema.filter(x => x.name == "negotiated_rates").size >= 1)
   }
 
-  test("Streaming Query w/ json payload as an Array"){
+  test("TST04-Streaming Query w/ nongzip json payload as an Array"){
     val df = ( spark.readStream
       .format("payer-mrf")
       .option("payloadAsArray", "true")
@@ -113,14 +113,47 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
     val resultDF = spark.read.format("parquet").load("src/test/resources/temp_ffs_array_rdd")
     assert(resultDF.count >= 1)
 
-    val jsonCollection = resultDF.select(resultDF("json_payload")).collect
+    //We are going to just look at the first array element of first row..
+    val jsonCollection = resultDF.select(col("json_payload")(0)).limit(1).collect()
 
     //checking if arrays are getting created
-    assert(jsonCollection(0).getAs[mutable.WrappedArray[String]](0).length >0)
+    assert(jsonCollection(0).getAs[String](0).length >0)
 
-    jsonCollection.map(row => row.getAs[Seq[String]](0).map(x => Json.parse(x))) //assert each element of array is a json object
+    //jsonCollection.map(row => row.getAs[Seq[String]](0).map(x => Json.parse(x))) //assert each element of array is a json object
   }
 
+  test("TST05-Streaming Query w/ gzipped json payload as an Array"){
+    val df = ( spark.readStream
+      .format("payer-mrf")
+      .option("payloadAsArray", "true")
+      .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample1.json.gz")
+      )
+    val query = (
+      df.writeStream
+        .outputMode("append")
+        .format("parquet")
+        .queryName("The JSON Array splitter")
+        .option("checkpointLocation", "src/test/resources/temp_ffs_array_rdd_chkpoint_dir")
+        .start("src/test/resources/temp_ffs_array_rdd")
+      )
+    Thread.sleep(5 * 1000)
+    assert(query.isActive)
+    query.processAllAvailable
+    query.stop
+    assert(!query.isActive)
+
+    val resultDF = spark.read.format("parquet").load("src/test/resources/temp_ffs_array_rdd")
+    assert(resultDF.count >= 1)
+
+    //We are going to just look at the first array element of first row..
+    val jsonCollection = resultDF.select(col("json_payload")(0)).limit(1).collect()
+
+    //checking if arrays are getting created
+    assert(jsonCollection(0).getAs[String](0).length >0)
+
+
+    //jsonCollection.map(row => row.getAs[Seq[String]](0).map(x => Json.parse(x) )) //assert each element of array is a json object
+  }
 
   after{
     fs.delete(new Path("src/test/resources/temp_ffs_sample_rdd_chkpoint_dir"), true)

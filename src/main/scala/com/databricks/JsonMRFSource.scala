@@ -1,22 +1,15 @@
 package com.databricks.labs.sparkstreaming.jsonmrf
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
-import collection.mutable.{Stack, ListBuffer}
-import java.util.zip.GZIPInputStream
-import java.io.{InputStreamReader, BufferedInputStream}
-import org.apache.spark.streaming.StreamingContext
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, Source}
-import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType, ArrayType}
-import org.apache.spark.sql.{DataFrame, SQLContext, Row}
-import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
 import org.apache.spark.sql.execution.LogicalRDD
-import org.apache.spark.unsafe.types.UTF8String
-import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.conf.Configuration
-import org.apache.spark.SerializableWritable
+import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, Source}
+import org.apache.spark.sql.types.{ArrayType, StringType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, SQLContext}
+
+import java.io.BufferedInputStream
+import scala.collection.mutable.ListBuffer
 
 
 /*
@@ -49,13 +42,9 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       FileSystem.get(hadoopConf)
     case _ =>  FileSystem.get(hadoopConf)
   }
-  val fileName = new Path(options.get("path").get)
+  val fileName = new Path(options.get("uncompressedPath").get)
   val fileStream = fs.open(fileName)
-  val inStream = options.get("path").get match {
-    case ext if ext.endsWith("gz") =>   new BufferedInputStream(new GZIPInputStream(fileStream), BufferSize) //Gzip compression testing
-    case ext if ext.endsWith("json") => new BufferedInputStream(fileStream, BufferSize) //256MB buffer
-    case _ => throw new Exception("codec for file extension not implemented yet")
-  }
+  val inStream = new BufferedInputStream(fileStream, BufferSize) //256MB buffer
 
   override def schema: StructType = JsonMRFSource.getSchema(payloadAsArray)
   override def getOffset: Option[Offset] = this.synchronized {

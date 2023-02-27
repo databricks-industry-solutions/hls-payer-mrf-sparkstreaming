@@ -3,16 +3,14 @@ package com.databricks.labs.sparkstreaming.jsonmrf
 
 import com.google.common.io.ByteStreams
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.unsafe.types.UTF8String
-import org.apache.spark.{InterruptibleIterator, Partition, SparkContext, TaskContext}
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.ArrayData
-import org.apache.hadoop.fs.{FileSystem, Path, FSDataInputStream}
-import java.io.BufferedInputStream
-import scala.util.Random
-import org.apache.spark.SerializableWritable
-import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.{Partition, SparkContext, TaskContext}
+
+import java.nio.charset.StandardCharsets
 
 case class JsonPartition(start: Long, end: Long,  headerKey: String = "", idx: Int = 0 ) extends Partition{
   override def index: Int = idx
@@ -44,38 +42,61 @@ private class JsonMRFRDD(
 
     val buffersize = ( part.end - part.start + 1).toInt
     var buffer = new Array[Byte](buffersize)
+    var isWhitespace = false
+
     ByteStreams.readFully(in, buffer)
     in.close
     //Make the header data valid JSON values
     if (part.headerKey == ""){
       //startByte and the endBytes should be '{' or '}' in a header
-      if( buffer(ByteParser.skipWhiteSpaceLeft(buffer, 0, buffersize)) != ByteParser.OpenB )
-        buffer = Array('{'.toByte) ++ buffer
-      if( buffer(ByteParser.skipWhiteSpaceRight(buffer, buffersize-1, buffersize)) != ByteParser.CloseB)
-        buffer = buffer  :+ '}'.toByte
+      val beginFromLeft = ByteParser.skipWhiteSpaceLeft(buffer, 0, buffersize)
+
+      if (beginFromLeft < 0 ) {
+        //If its all whitespace, no need to proceed further
+        isWhitespace = true
+      }else{
+        if( buffer(beginFromLeft) != ByteParser.OpenB )
+          buffer = Array('{'.toByte) ++ buffer
+
+        val endFromRight = ByteParser.skipWhiteSpaceRight(buffer, buffersize-1, buffersize)
+        if( buffer(endFromRight) != ByteParser.CloseB)
+          buffer = buffer  :+ '}'.toByte
+
+      }
+
     }
-    if (payloadAsArray){ //returns the json payload as an Array[String] instead of a String
-      var arr = Array[UTF8String]()
-      var start = 0
-      var finish = 0
-      do {
-        finish = ByteParser.seekMatchingEndBracket(buffer, start, buffersize+1)
-        arr = arr :+ UTF8String.fromBytes(buffer.slice(start, finish+1))
-        start = ByteParser.arrayHasNext(buffer, finish, buffersize)
-      } while( 0 <= start && finish < buffersize )
+    if(!isWhitespace) {
+      if (payloadAsArray) { //returns the json payload as an Array[String] instead of a String
+        var arr = Array[UTF8String]()
+        var start = 0
+        var finish = 0
+        do {
+          finish = ByteParser.seekMatchingEndBracket(buffer, start, buffersize + 1)
+          arr = arr :+ UTF8String.fromBytes(buffer.slice(start, finish + 1))
+          start = ByteParser.arrayHasNext(buffer, finish, buffersize)
+        } while (0 <= start && finish < buffersize)
+
+        Seq(InternalRow(
+          UTF8String.fromString(fileName.getName),
+          UTF8String.fromString(part.headerKey),
+          ArrayData.toArrayData(arr)
+        )).toIterator
+      }
+      else {
+        //return the json_payload as a String
+        buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
+        Seq(InternalRow(
+          UTF8String.fromString(fileName.getName),
+          UTF8String.fromString(part.headerKey),
+          UTF8String.fromBytes(buffer)
+        )).toIterator
+      }
+    }else{
+      //if its all whitespace, just return an empty array
       Seq(InternalRow(
         UTF8String.fromString(fileName.getName),
         UTF8String.fromString(part.headerKey),
-        ArrayData.toArrayData(arr)
-      )).toIterator
-    }
-    else{
-      //return the json_payload as a String
-      buffer = Array('['.toByte) ++ buffer ++ Array(']'.toByte)
-      Seq(InternalRow(
-        UTF8String.fromString(fileName.getName),
-        UTF8String.fromString(part.headerKey),
-        UTF8String.fromBytes(buffer)
+        ArrayData.toArrayData(Array[UTF8String]())
       )).toIterator
     }
   }
