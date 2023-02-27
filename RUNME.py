@@ -31,7 +31,7 @@
 # MAGIC %sh -e
 # MAGIC #Download to DBFS storage
 # MAGIC mkdir -p /dbfs/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/
-# MAGIC wget https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/releases/download/0.3.3v/payer-mrf-streamsource-0.3.3.jar -O /dbfs/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.3.jar
+# MAGIC wget https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/releases/download/0.3.4v/payer-mrf-streamsource-0.3.4.jar -O /dbfs/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.4.jar
 
 # COMMAND ----------
 
@@ -63,7 +63,7 @@ job_json = {
                 },
                 "libraries": [
                     {
-                        "jar": "dbfs:/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.3.jar"
+                        "jar": "dbfs:/databricks-industry-solutions/hls-payer-mrf-sparkstreaming/payer-mrf-streamsource-0.3.4.jar"
                     }
                 ],
                 "depends_on": [
