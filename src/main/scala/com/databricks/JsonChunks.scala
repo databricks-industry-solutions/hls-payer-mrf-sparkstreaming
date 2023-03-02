@@ -96,8 +96,8 @@ private class JsonMRFRDD(
       Seq(InternalRow(
         UTF8String.fromString(fileName.getName),
         UTF8String.fromString(part.headerKey),
-        ArrayData.toArrayData(Array[UTF8String]())
-      )).toIterator
+        {if (payloadAsArray) ArrayData.toArrayData(Array[UTF8String]()) else UTF8String.fromString("")})
+      ).toIterator
     }
   }
 }
