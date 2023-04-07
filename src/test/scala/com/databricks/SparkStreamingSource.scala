@@ -37,6 +37,7 @@ class SparkStreamingSource extends BaseTest with BeforeAndAfter{
   test("TST02-Results are all valid JSON objects"){
     val df = ( spark.readStream
       .format("payer-mrf")
+      .option("filesystem", "s3a")
       .load("src/test/resources/in-network-rates-fee-for-service-single-plan-sample.json")
     )
 
