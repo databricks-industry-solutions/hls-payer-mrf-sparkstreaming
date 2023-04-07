@@ -39,7 +39,8 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       println("Conf --> setting filesystem to fs.s3a.S3AFileSystem")
       hadoopConf.set("fs.s3a.impl","org.apache.hadoop.fs.s3a.S3AFileSystem")
       hadoopConf.set("fs.s3.aws.credentials.provider", "com.amazonaws.auth.EnvironmentVariableCredentialsProvider")
-      FileSystem.get(hadoopConf)
+      val p = new Path(options.get("uncompressedPath").get)
+      p.getFileSystem(hadoopConf)
     case _ =>  FileSystem.get(hadoopConf)
   }
   val fileName = new Path(options.get("uncompressedPath").get)
