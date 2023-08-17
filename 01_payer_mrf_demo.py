@@ -1,10 +1,14 @@
 # Databricks notebook source
+# MAGIC %md This notebook is available at https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming. For more information about this solution accelerator, visit https://www.databricks.com/solutions/accelerators/price-transparency-data.
+
+# COMMAND ----------
+
 # MAGIC %md 
 # MAGIC ## Example Workflow Steps 
 # MAGIC > **Bronze**
 # MAGIC >> Download & Decompress   
 # MAGIC >> Stream Data  
-# MAGIC 
+# MAGIC
 # MAGIC > **Silver**  
 # MAGIC >> Curation ETL into desired Data Model    
 # MAGIC  
@@ -26,7 +30,7 @@
 # MAGIC %sh
 # MAGIC #clean up any old data
 # MAGIC rm -rf /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/payer_transparency_ingest
-# MAGIC 
+# MAGIC
 # MAGIC # Download to DBFS storage
 # MAGIC mkdir -p /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/
 # MAGIC wget -O /dbfs/user/hive/warehouse/hls_dev_payer_transparency.db/raw_files/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz  https://uhc-tic-mrf.azureedge.net/public-mrf/2022-12-01/2022-12-01_UMR--Inc-_Third-Party-Administrator_ENCORE-ENTERPRISES-AIRROSTI-DCI_TX-DALLAS-NON-EVALUATED-GAP_-ENC_NXBJ_in-network-rates.json.gz
@@ -139,7 +143,7 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # MAGIC %sql
 # MAGIC --Exploding each nested array producing a 1:M relationship between tables
 # MAGIC --  Creating surrogate keys with UUID() function to easily join tables
-# MAGIC 
+# MAGIC
 # MAGIC --Provider References X Payer
 # MAGIC drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer;
 # MAGIC create table hls_dev_payer_transparency.payer_transparency_in_network_provider_references_x_payer
@@ -153,7 +157,7 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # MAGIC inner join (select  reporting_entity_name, reporting_entity_type from  hls_dev_payer_transparency.payer_transparency_in_network_provider_header where reporting_entity_name is not null) entity
 # MAGIC on 1=1 
 # MAGIC ;
-# MAGIC 
+# MAGIC
 # MAGIC --Procedure Table
 # MAGIC drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes;
 # MAGIC create table hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes
@@ -168,7 +172,7 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # MAGIC ,n.negotiated_rates
 # MAGIC from hls_dev_payer_transparency.payer_transparency_in_network_in_network n
 # MAGIC ;
-# MAGIC 
+# MAGIC
 # MAGIC -- M:M relationship between rates and network
 # MAGIC drop table if exists hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates;
 # MAGIC create table hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates
@@ -182,7 +186,7 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # MAGIC from hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes c
 # MAGIC ) foo
 # MAGIC ;
-# MAGIC 
+# MAGIC
 # MAGIC --Procedure Price details
 # MAGIC drop table if exists  hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_prices;
 # MAGIC create table  hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_prices
@@ -195,7 +199,7 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # MAGIC ) foo
 # MAGIC where price.negotiated_type = 'negotiated'
 # MAGIC ; 
-# MAGIC 
+# MAGIC
 # MAGIC --Providers par in a price and procedure
 # MAGIC drop table if exists  hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_par_providers;
 # MAGIC create table  hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_par_providers
@@ -217,11 +221,11 @@ spark.read.json(in_network_rdd).write.mode("overwrite").saveAsTable("hls_dev_pay
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC 
+# MAGIC
 # MAGIC CREATE WIDGET TEXT billing_code DEFAULT "43283"; 
-# MAGIC 
+# MAGIC
 # MAGIC CREATE WIDGET TEXT tin_value DEFAULT "161294447";
-# MAGIC 
+# MAGIC
 # MAGIC SELECT billing_code, description, billing_class, billing_code_modifier, service_code, negotiated_rate, npi, tin
 # MAGIC FROM hls_dev_payer_transparency.payer_transparency_in_network_in_network_codes proc
 # MAGIC inner join hls_dev_payer_transparency.payer_transparency_in_network_in_network_rates_prices price

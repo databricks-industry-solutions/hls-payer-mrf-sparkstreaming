@@ -1,15 +1,19 @@
 # Databricks notebook source
+# MAGIC %md This notebook is available at https://github.com/databricks-industry-solutions/hls-payer-mrf-sparkstreaming. For more information about this solution accelerator, visit https://www.databricks.com/solutions/accelerators/price-transparency-data.
+
+# COMMAND ----------
+
 # MAGIC %md 
 # MAGIC # Custom Spark Streaming Source - Payer MRF
-# MAGIC 
+# MAGIC
 # MAGIC ## Use Case 
-# MAGIC 
-# MAGIC 
+# MAGIC
+# MAGIC
 # MAGIC CMS Schemas for MRF are built using a single json object which spark by default cannot split. Reading these large files often results in Out of Memory errors. This parser serves to transform any array objects under the header into multiple splittable lists that can be parsed. See sample schemas here ->  https://github.com/CMSgov/price-transparency-guide/tree/master/schemas
-# MAGIC 
-# MAGIC 
+# MAGIC
+# MAGIC
 # MAGIC ## Where to get MRF Files? 
-# MAGIC 
+# MAGIC
 # MAGIC Here are some of the USA's larger payers and landing page
 # MAGIC 1. UHG https://transparency-in-coverage.uhc.com/
 # MAGIC 2. Anthem https://www.anthem.com/machine-readable-file/search/
