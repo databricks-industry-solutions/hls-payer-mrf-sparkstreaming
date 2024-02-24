@@ -2,7 +2,7 @@
 
 ## Use Case 
 
-Radiology examination protocols and labeling are a time consuming administrative process for clinicians today. This repo explores fine tining an LLM on Databricks to automate label generation from clinical notes.  
+Radiology examination protocols and labeling are a time consuming administrative process for clinicians today. This repo explores fine tining an LLM on Databricks to automate label generation from clinical notes. More details around this use case can be found [here](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8861685/)
 
 ## Running the Solution
 
