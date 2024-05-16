@@ -41,7 +41,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
       hadoopConf.set("fs.s3.aws.credentials.provider", "com.amazonaws.auth.EnvironmentVariableCredentialsProvider")
       val p = new Path(options.get("uncompressedPath").get)
       p.getFileSystem(hadoopConf)
-    case _ =>  FileSystem.get(hadoopConf)
+    case _ =>  new Path(options.get("uncompressedPath").get).getFileSystem(hadoopConf)
   }
   val fileName = new Path(options.get("uncompressedPath").get)
   val fileStream = fs.open(fileName)

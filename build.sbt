@@ -1,9 +1,9 @@
 name := "payer-mrf-streamsource"
 
-version := "0.3.6"
+version := "0.3.7"
 
 lazy val scala212 = "2.12.8"
-lazy val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "3.2.1")
+lazy val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "3.4.1")
 ThisBuild / organization := "com.databricks.labs"
 ThisBuild / organizationName := "Databricks, Inc."
 
@@ -12,7 +12,7 @@ lazy val sparkDependencies = Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion,
   "org.apache.spark" %% "spark-mllib" % sparkVersion,
   "org.apache.spark" %% "spark-sql" % sparkVersion,
-  "org.apache.hadoop" % "hadoop-hdfs" % "3.3.0"
+  "org.apache.hadoop" % "hadoop-hdfs" % "3.4.0"
 ).map(_ % " provided")
 
 lazy val testDependencies = Seq(

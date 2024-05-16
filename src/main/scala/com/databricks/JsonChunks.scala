@@ -35,7 +35,7 @@ private class JsonMRFRDD(
   //Only ever returning one "row" with the iterator...
   //Maybe change this in the future to break apart the json object further into individual rows?
   override def compute(thePart: Partition, context: TaskContext): Iterator[InternalRow] =  {
-    val in = JsonMRFRDD.fs.open(fileName)
+    val in = JsonMRFRDD.fs(fileName).open(fileName)
     //Close out fis, bufferinputstream objects, etc
     val part = thePart.asInstanceOf[JsonPartition]
     in.seek(part.start)
@@ -104,5 +104,5 @@ private class JsonMRFRDD(
 
 
 object JsonMRFRDD{
-  val fs = FileSystem.get(new Configuration)
+  val fs = (p:Path) => p.getFileSystem(new Configuration)
 }
