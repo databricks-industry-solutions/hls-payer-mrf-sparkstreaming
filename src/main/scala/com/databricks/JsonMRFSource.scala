@@ -1,7 +1,7 @@
 package com.databricks.labs.sparkstreaming.jsonmrf
 
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
+import org.apache.spark.sql.Encoders
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, Source}
@@ -218,7 +218,7 @@ class JsonMRFSource (sqlContext: SQLContext, options: Map[String, String]) exten
 
     val qe = sqlContext.sparkSession.sessionState.executePlan(logicalPlan)
     qe.assertAnalyzed()
-    new org.apache.spark.sql.Dataset(sqlContext.sparkSession, logicalPlan, RowEncoder(qe.analyzed.schema))
+    new org.apache.spark.sql.Dataset(sqlContext.sparkSession, logicalPlan, Encoders.row(qe.analyzed.schema))
   }
 
   override def stop(): Unit = reader.stop
